@@ -1,0 +1,2 @@
+[tools]
+rocale-cli = { github = "Roblox/rocale-cli", version = "=0.1.3" }

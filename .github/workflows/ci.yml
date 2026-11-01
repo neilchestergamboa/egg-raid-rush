@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install project tools
+        uses: paradoxum-games/setup-rokit@v3
+        with:
+          cache: true
+
+      - name: Install Wally packages
+        run: wally install
+
+      - name: Check formatting
+        run: stylua --check src
+
+      - name: Check Luau
+        run: selene src
+
+      - name: Check Zap generation
+        run: |
+          zap net/net.zap
+          git diff --exit-code -- net/network
+
+      - name: Build Roblox place
+        run: rojo build -o /tmp/EggRaidRush.rbxlx
+
+  cloud-tests:
+    needs: validate
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install project tools
+        uses: paradoxum-games/setup-rokit@v3
+        with:
+          cache: true
+
+      - name: Install Wally packages
+        run: wally install
+
+      - name: Install rocale-cli
+        uses: Roblox/setup-foreman@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Jest tests in Roblox
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          ROBLOX_UNIVERSE_ID: ${{ vars.ROBLOX_UNIVERSE_ID }}
+          ROBLOX_PLACE_ID: ${{ vars.ROBLOX_PLACE_ID }}
+        run: rocale-cli run --universeId "$ROBLOX_UNIVERSE_ID" --placeId "$ROBLOX_PLACE_ID" --load.project test.project.json --script scripts/run-tests.lua
