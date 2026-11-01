@@ -4,21 +4,16 @@
     "$className": "DataModel",
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "$properties": {
-        "LoadStringEnabled": true
-      }
+      "$properties": { "LoadStringEnabled": true },
+      "ServerServices": { "$path": "src/server/Services" },
+      "ServerPackages": { "$path": "ServerPackages" }
     },
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
-      "Shared": {
-        "$path": "src/shared"
-      },
-      "Tests": {
-        "$path": "tests"
-      },
-      "DevPackages": {
-        "$path": "DevPackages"
-      }
+      "Shared": { "$path": "src/shared" },
+      "Packages": { "$path": "Packages" },
+      "Tests": { "$path": "tests" },
+      "DevPackages": { "$path": "DevPackages" }
     }
   }
 }
