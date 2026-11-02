@@ -8,6 +8,9 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Framework = require(Shared:WaitForChild("Framework") :: ModuleScript)
 local ProfileSchema = require(Shared:WaitForChild("Types"):WaitForChild("ProfileSchema") :: ModuleScript)
+local PetDefs = require(Shared:WaitForChild("Config"):WaitForChild("PetDefs") :: ModuleScript)
+local ConditionDefs = require(Shared:WaitForChild("Config"):WaitForChild("ConditionDefs") :: ModuleScript)
+local PetPower = require(Shared:WaitForChild("Rules"):WaitForChild("PetPower") :: ModuleScript)
 local ProfileStoreModule =
     ServerScriptService:WaitForChild("ServerPackages"):WaitForChild("ProfileStore") :: ModuleScript
 local ProfileStore = require(ProfileStoreModule) :: any
@@ -129,6 +132,31 @@ end
 
 function DataService:ClearHatchRoll(userId: number, eggUid: string): (boolean, string?)
     return SessionManager:ClearHatchRoll(userId, eggUid)
+end
+
+function DataService:GrantCapturedPet(
+    player: Player,
+    creatureUid: string,
+    petDefId: string,
+    conditionId: string
+): (boolean, string?)
+    local petDef = PetDefs[petDefId]
+    local condition = ConditionDefs[conditionId]
+    if type(creatureUid) ~= "string" or creatureUid == "" then
+        return false, "InvalidCreatureUid"
+    end
+    if type(petDef) ~= "table" or type(condition) ~= "table" then
+        return false, "PetConfigMissing"
+    end
+    local petData = {
+        DefId = petDefId,
+        Condition = conditionId,
+        Power = PetPower.Calculate(petDef.BasePower, condition.PowerMultiplier),
+        Gps = petDef.Gps,
+        KnockedOutUntil = 0,
+        Source = "Raid",
+    }
+    return SessionManager:GrantPet(player.UserId, creatureUid, petData)
 end
 
 return DataService

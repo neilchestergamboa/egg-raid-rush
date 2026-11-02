@@ -9,6 +9,7 @@ export type EggState =
     | "Won"
     | "Lost"
     | "Carried"
+    | "Dropped"
     | "Banked"
     | "Respawning"
 
@@ -32,6 +33,12 @@ export type EggSlotRecord = EggSlotDefinition & {
     ConditionRollOwnerUserId: number?,
     ClaimedPetUid: string?,
     ClaimedPetPower: number?,
+    CreatureUid: string?,
+    CarrierUserId: number?,
+    PreviousCarrierUserId: number?,
+    PickupLockoutUntil: number?,
+    DropExpiresAt: number?,
+    DropPosition: Vector3?,
 }
 
 export type EggSlotRuntime = {
@@ -51,6 +58,22 @@ export type EggSlotRuntime = {
         conditionId: string,
         seed: number
     ) -> (boolean, string?),
+    AssignCreatureUid: (
+        self: EggSlotRuntime,
+        uid: string,
+        claimantUserId: number,
+        creatureUid: string
+    ) -> (string?, string?),
+    SetCarrier: (self: EggSlotRuntime, uid: string, userId: number, creatureUid: string) -> (boolean, string?),
+    DropCreature: (
+        self: EggSlotRuntime,
+        uid: string,
+        userId: number,
+        position: Vector3,
+        dropExpiresAt: number,
+        lockoutUntil: number
+    ) -> (boolean, string?),
+    ReturnCreature: (self: EggSlotRuntime, uid: string) -> (boolean, string?),
 }
 
 type RuntimeOptions = {
@@ -66,7 +89,8 @@ local VALID_NEXT_STATES: { [EggState]: { [EggState]: boolean } } = {
     Released = { Sealed = true },
     Fighting = { Won = true, Lost = true },
     Won = { Carried = true },
-    Carried = { Banked = true },
+    Carried = { Banked = true, Dropped = true },
+    Dropped = { Carried = true, Sealed = true },
     Lost = {},
     Banked = {},
     Respawning = {},
@@ -107,6 +131,12 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
             ConditionRollOwnerUserId = nil,
             ClaimedPetUid = nil,
             ClaimedPetPower = nil,
+            CreatureUid = nil,
+            CarrierUserId = nil,
+            PreviousCarrierUserId = nil,
+            PickupLockoutUntil = nil,
+            DropExpiresAt = nil,
+            DropPosition = nil,
         }
         recordsByUid[record.Uid] = record
         table.insert(orderedUids, record.Uid)
@@ -134,6 +164,12 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
         record.ConditionRollOwnerUserId = nil
         record.ClaimedPetUid = nil
         record.ClaimedPetPower = nil
+        record.CreatureUid = nil
+        record.CarrierUserId = nil
+        record.PreviousCarrierUserId = nil
+        record.PickupLockoutUntil = nil
+        record.DropExpiresAt = nil
+        record.DropPosition = nil
         commitState(record, sourceState, "EggConsumed")
         record.RespawnSourceState = sourceState
         record.ExpiresAt = options.Now() + record.RespawnSeconds
@@ -193,6 +229,108 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
         record.ClaimedPetUid = petUid
         record.ClaimedPetPower = petPower
         options.OnChanged(cloneRecord(record), record.State, "HatchConditionCommitted")
+        return true, nil
+    end
+
+    function runtime:AssignCreatureUid(uid: string, claimantUserId: number, creatureUid: string): (string?, string?)
+        local record = getRecord(uid)
+        if record == nil then
+            return nil, "EggNotFound"
+        end
+        if record.State ~= "Won" or record.ClaimantUserId ~= claimantUserId then
+            return nil, "EggNotWonByPlayer"
+        end
+        if type(creatureUid) ~= "string" or creatureUid == "" then
+            return nil, "InvalidCreatureUid"
+        end
+        if record.CreatureUid ~= nil then
+            return record.CreatureUid, nil
+        end
+        record.CreatureUid = creatureUid
+        options.OnChanged(cloneRecord(record), record.State, "CreatureUidAssigned")
+        return creatureUid, nil
+    end
+
+    function runtime:SetCarrier(uid: string, userId: number, creatureUid: string): (boolean, string?)
+        local record = getRecord(uid)
+        if record == nil then
+            return false, "EggNotFound"
+        end
+        if record.CreatureUid ~= creatureUid or creatureUid == "" then
+            return false, "CreatureUidMismatch"
+        end
+        if record.State == "Carried" and record.CarrierUserId == userId then
+            return true, nil
+        end
+        if record.State == "Won" and record.ClaimantUserId ~= userId then
+            return false, "EggNotWonByPlayer"
+        end
+        if record.State ~= "Won" and record.State ~= "Dropped" then
+            return false, "CreatureUnavailable"
+        end
+        record.CarrierUserId = userId
+        record.PreviousCarrierUserId = nil
+        record.PickupLockoutUntil = nil
+        record.DropExpiresAt = nil
+        record.DropPosition = nil
+        commitState(record, "Carried", "CarrierAssigned")
+        return true, nil
+    end
+
+    function runtime:DropCreature(
+        uid: string,
+        userId: number,
+        position: Vector3,
+        dropExpiresAt: number,
+        lockoutUntil: number
+    ): (boolean, string?)
+        local record = getRecord(uid)
+        if record == nil then
+            return false, "EggNotFound"
+        end
+        if record.State == "Dropped" and record.PreviousCarrierUserId == userId then
+            return true, nil
+        end
+        if record.State ~= "Carried" or record.CarrierUserId ~= userId then
+            return false, "CreatureNotCarriedByPlayer"
+        end
+        if dropExpiresAt <= options.Now() or lockoutUntil < options.Now() then
+            return false, "InvalidDropTiming"
+        end
+        record.PreviousCarrierUserId = userId
+        record.CarrierUserId = nil
+        record.PickupLockoutUntil = lockoutUntil
+        record.DropExpiresAt = dropExpiresAt
+        record.DropPosition = position
+        commitState(record, "Dropped", "GuardTagged")
+        return true, nil
+    end
+
+    function runtime:ReturnCreature(uid: string): (boolean, string?)
+        local record = getRecord(uid)
+        if record == nil then
+            return false, "EggNotFound"
+        end
+        if record.State == "Sealed" then
+            return true, nil
+        end
+        if record.State ~= "Won" and record.State ~= "Carried" and record.State ~= "Dropped" then
+            return false, "CreatureCannotBeReturned"
+        end
+        record.ClaimantUserId = nil
+        record.ExpiresAt = nil
+        record.ConditionRoll = nil
+        record.ConditionSeed = nil
+        record.ConditionRollOwnerUserId = nil
+        record.ClaimedPetUid = nil
+        record.ClaimedPetPower = nil
+        record.CreatureUid = nil
+        record.CarrierUserId = nil
+        record.PreviousCarrierUserId = nil
+        record.PickupLockoutUntil = nil
+        record.DropExpiresAt = nil
+        record.DropPosition = nil
+        commitState(record, "Sealed", "CreatureReturnedToField")
         return true, nil
     end
 

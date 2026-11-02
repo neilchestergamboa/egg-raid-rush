@@ -287,6 +287,40 @@ JestGlobals.describe("ProfileSessionManager", function()
         JestGlobals.expect(profile.Data.Pets[petUid].KnockedOutUntil).toBe(0)
     end)
 
+    JestGlobals.it("grants a captured pet idempotently and prevents a uid from granting different data", function()
+        local player = makePlayer(60)
+        local profile = makeProfile(ProfileSchema.CreateTemplate())
+        local manager = ProfileSessionManager.new(makeStore(profile), ProfileSchema, function(user)
+            return user.Connected
+        end, function() end)
+        JestGlobals.expect(manager:Load(player)).toBe(true)
+        local capturedPet = {
+            DefId = "pet_hyena_pup",
+            Condition = "Polished",
+            Power = 144,
+            Gps = 1,
+            KnockedOutUntil = 0,
+            Source = "Raid",
+        }
+        local first, firstError = manager:GrantPet(60, "creature-guid-1", capturedPet)
+        local duplicate, duplicateError = manager:GrantPet(60, "creature-guid-1", table.clone(capturedPet))
+        local conflict, conflictError = manager:GrantPet(60, "creature-guid-1", {
+            DefId = "pet_jackal_pup",
+            Condition = "Sturdy",
+            Power = 120,
+            Gps = 1,
+            KnockedOutUntil = 0,
+            Source = "Raid",
+        })
+        JestGlobals.expect(first).toBe(true)
+        JestGlobals.expect(firstError).toBe(nil)
+        JestGlobals.expect(duplicate).toBe(true)
+        JestGlobals.expect(duplicateError).toBe("AlreadyGranted")
+        JestGlobals.expect(conflict).toBe(false)
+        JestGlobals.expect(conflictError).toBe("PetUidConflict")
+        JestGlobals.expect(profile.Data.Pets["creature-guid-1"]).toEqual(capturedPet)
+    end)
+
     JestGlobals.it("preserves an existing pending hatch roll during migration", function()
         local legacy = {
             Version = 1,

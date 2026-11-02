@@ -25,6 +25,19 @@ type FightActionResultCode = enum {
 	ServerError,
 }
 
+type CarryActionResultCode = enum {
+	PickedUp,
+	CreatureNotFound,
+	CreatureUnavailable,
+	NoCharacter,
+	TooFar,
+	CarryingCreature,
+	PickupLockedOut,
+	DropExpired,
+	RateLimited,
+	ServerError,
+}
+
 funct RequestEgg = {
     call: Async,
     args: (eggUid: string.utf8(1..64)),
@@ -35,4 +48,10 @@ funct RetreatEgg = {
 	call: Async,
 	args: (eggUid: string.utf8(1..64)),
 	rets: FightActionResultCode,
+}
+
+funct PickupCreature = {
+	call: Async,
+	args: (eggUid: string.utf8(1..64)),
+	rets: CarryActionResultCode,
 }

@@ -20,6 +20,7 @@ export type ProfileSessionManager = {
         seed: number
     ) -> (any?, string?),
     ClearHatchRoll: (self: ProfileSessionManager, userId: number, eggUid: string) -> (boolean, string?),
+    GrantPet: (self: ProfileSessionManager, userId: number, petUid: string, petData: any) -> (boolean, string?),
 }
 
 type SessionRecord = {
@@ -201,6 +202,32 @@ local function new(
             return false, "InvalidEggUid"
         end
         record.Profile.Data.PendingHatchRolls[eggUid] = nil
+        return true, nil
+    end
+
+    function manager:GrantPet(userId: number, petUid: string, petData: any): (boolean, string?)
+        local record = profilesByUserId[userId]
+        if record == nil or not record.Profile:IsActive() then
+            return false, "ProfileNotLoaded"
+        end
+        if type(petUid) ~= "string" or petUid == "" or type(petData) ~= "table" then
+            return false, "InvalidPetGrant"
+        end
+        local pets = record.Profile.Data.Pets
+        local existing = pets[petUid]
+        if existing ~= nil then
+            if
+                existing.DefId == petData.DefId
+                and existing.Condition == petData.Condition
+                and existing.Power == petData.Power
+                and existing.Gps == petData.Gps
+                and existing.Source == petData.Source
+            then
+                return true, "AlreadyGranted"
+            end
+            return false, "PetUidConflict"
+        end
+        pets[petUid] = table.clone(petData)
         return true, nil
     end
 

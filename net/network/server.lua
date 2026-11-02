@@ -140,6 +140,9 @@ if not RunService:IsRunning() then
 		RequestEgg = table.freeze({
 			SetCallback = noop
 		}),
+		PickupCreature = table.freeze({
+			SetCallback = noop
+		}),
 	}) :: Events
 end
 
@@ -172,6 +175,7 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
 export type FightActionResultCode = ("Retreated" | "FightNotActive" | "RateLimited" | "ServerError")
+export type CarryActionResultCode = ("PickedUp" | "CreatureNotFound" | "CreatureUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "PickupLockedOut" | "DropExpired" | "RateLimited" | "ServerError")
 
 local function SendEvents()
 	for player, outgoing in player_map do
@@ -191,7 +195,7 @@ end
 
 RunService.Heartbeat:Connect(SendEvents)
 
-local reliable_events = table.create(2)
+local reliable_events = table.create(3)
 reliable.OnServerEvent:Connect(function(player, buff, inst)
 	incoming_buff = buff
 	incoming_inst = inst
@@ -288,6 +292,51 @@ reliable.OnServerEvent:Connect(function(player, buff, inst)
 					player_map[player_2] = save()
 				end, player, call_id, value)
 			end
+		elseif id == 2 then -- PickupCreature
+			local call_id = buffer.readu8(buff, read(1))
+			local value
+			local len_3 = buffer.readu8(incoming_buff, read(1)) + 1
+			assert(len_3 >= 1, "value is less than 1!")
+			assert(len_3 <= 256, "value is more than 256!")
+			value = buffer.readstring(incoming_buff, read(len_3), len_3)
+			assert(utf8.len(value) ~= nil, "value is not valid utf-8")
+			if reliable_events[2] then
+				task.spawn(function(player_2, call_id_2, value_1)
+					local ret_1 = reliable_events[2](player_2, value_1)
+					load_player(player_2)
+					alloc(1)
+					buffer.writeu8(outgoing_buff, outgoing_apos, 2)
+					alloc(1)
+					buffer.writeu8(outgoing_buff, outgoing_apos, call_id_2)
+					local bool_3 = 0
+					local bool_3_pos_1 = alloc(2)
+					if ret_1 == "PickedUp" then
+						bool_3 = bit32.bor(bool_3, 0b0000000000000001)
+					elseif ret_1 == "CreatureNotFound" then
+						bool_3 = bit32.bor(bool_3, 0b0000000000000010)
+					elseif ret_1 == "CreatureUnavailable" then
+						bool_3 = bit32.bor(bool_3, 0b0000000000000100)
+					elseif ret_1 == "NoCharacter" then
+						bool_3 = bit32.bor(bool_3, 0b0000000000001000)
+					elseif ret_1 == "TooFar" then
+						bool_3 = bit32.bor(bool_3, 0b0000000000010000)
+					elseif ret_1 == "CarryingCreature" then
+						bool_3 = bit32.bor(bool_3, 0b0000000000100000)
+					elseif ret_1 == "PickupLockedOut" then
+						bool_3 = bit32.bor(bool_3, 0b0000000001000000)
+					elseif ret_1 == "DropExpired" then
+						bool_3 = bit32.bor(bool_3, 0b0000000010000000)
+					elseif ret_1 == "RateLimited" then
+						bool_3 = bit32.bor(bool_3, 0b0000000100000000)
+					elseif ret_1 == "ServerError" then
+						bool_3 = bit32.bor(bool_3, 0b0000001000000000)
+					else
+						error("Invalid enumerator")
+					end
+					buffer.writeu16(outgoing_buff, bool_3_pos_1, bool_3)
+					player_map[player_2] = save()
+				end, player, call_id, value)
+			end
 		else
 			error("Unknown event id")
 		end
@@ -311,6 +360,14 @@ local returns = {
 			reliable_events[0] = Callback
 			return function()
 				reliable_events[0] = nil
+			end
+		end,
+	},
+	PickupCreature = {
+		SetCallback = function(Callback: (Player: Player, eggUid: (string)) -> (("PickedUp" | "CreatureNotFound" | "CreatureUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "PickupLockedOut" | "DropExpired" | "RateLimited" | "ServerError"))): () -> ()
+			reliable_events[2] = Callback
+			return function()
+				reliable_events[2] = nil
 			end
 		end,
 	},

@@ -11,7 +11,19 @@ local function publish(target: Instance, record: any)
     target:SetAttribute("State", record.State)
     target:SetAttribute("ClaimantUserId", record.ClaimantUserId)
     target:SetAttribute("ExpiresAt", record.ExpiresAt)
-    if record.State == "Fighting" or record.State == "Won" or record.State == "Carried" or record.State == "Banked" then
+    target:SetAttribute("CreatureUid", record.CreatureUid)
+    target:SetAttribute("CarrierUserId", record.CarrierUserId)
+    target:SetAttribute("PreviousCarrierUserId", record.PreviousCarrierUserId)
+    target:SetAttribute("PickupLockoutUntil", record.PickupLockoutUntil)
+    target:SetAttribute("DropExpiresAt", record.DropExpiresAt)
+    target:SetAttribute("DropPosition", record.DropPosition)
+    if
+        record.State == "Fighting"
+        or record.State == "Won"
+        or record.State == "Carried"
+        or record.State == "Dropped"
+        or record.State == "Banked"
+    then
         target:SetAttribute("ConditionRoll", record.ConditionRoll)
     else
         target:SetAttribute("ConditionRoll", nil)
@@ -20,6 +32,7 @@ local function publish(target: Instance, record: any)
         record.State ~= "Fighting"
         and record.State ~= "Won"
         and record.State ~= "Carried"
+        and record.State ~= "Dropped"
         and record.State ~= "Banked"
     then
         for _, attributeName in
