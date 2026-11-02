@@ -17,6 +17,7 @@ JestGlobals.describe("ProfileSchema", function()
         JestGlobals.expect(template.Pets).toEqual({})
         JestGlobals.expect(template.ChampionPetUid).toBe("")
         JestGlobals.expect(template.SpeedPoints).toBe(0)
+        JestGlobals.expect(template.PendingHatchRolls).toEqual({})
     end)
 
     JestGlobals.it("grants a stable Sturdy Jackal Pup starter and equips it", function()
@@ -39,9 +40,10 @@ JestGlobals.describe("ProfileSchema", function()
         local ok, migratedOrError = ProfileSchema.Migrate(legacy, 2468)
         JestGlobals.expect(ok).toBe(true)
         local migrated = migratedOrError :: any
-        JestGlobals.expect(migrated.Version).toBe(1)
+        JestGlobals.expect(migrated.Version).toBe(2)
         JestGlobals.expect(migrated.SpeedPoints).toBe(400)
         JestGlobals.expect(migrated.PreviousField).toBe("keep")
+        JestGlobals.expect(migrated.PendingHatchRolls).toEqual({})
         JestGlobals.expect(migrated.Pets["starter-2468"] ~= nil).toBe(true)
     end)
 
@@ -250,5 +252,52 @@ JestGlobals.describe("ProfileSessionManager", function()
         profile:TriggerExternalEnd()
         JestGlobals.expect(manager:GetProfile(56)).toBe(nil)
         JestGlobals.expect(kickCount).toBe(1)
+    end)
+
+    JestGlobals.it("commits hatch rolls idempotently and clears them after resolution", function()
+        local player = makePlayer(57)
+        local profile = makeProfile(ProfileSchema.CreateTemplate())
+        local manager = ProfileSessionManager.new(makeStore(profile), ProfileSchema, function(user)
+            return user.Connected
+        end, function() end)
+        JestGlobals.expect(manager:Load(player)).toBe(true)
+        local first = manager:GetOrCreateHatchRoll(57, "egg_z1_slot_1", "Sturdy", 123)
+        local retry = manager:GetOrCreateHatchRoll(57, "egg_z1_slot_1", "Flawless", 456)
+        JestGlobals.expect(first).toEqual({ ConditionId = "Sturdy", Seed = 123 })
+        JestGlobals.expect(retry).toEqual(first)
+        JestGlobals.expect(profile.Data.PendingHatchRolls.egg_z1_slot_1).toEqual(first)
+        local cleared = manager:ClearHatchRoll(57, "egg_z1_slot_1")
+        JestGlobals.expect(cleared).toBe(true)
+        JestGlobals.expect(profile.Data.PendingHatchRolls.egg_z1_slot_1).toBe(nil)
+    end)
+
+    JestGlobals.it("persists a pet recovery deadline and allows the authoritative retreat rollback", function()
+        local player = makePlayer(58)
+        local profile = makeProfile(ProfileSchema.CreateTemplate())
+        local manager = ProfileSessionManager.new(makeStore(profile), ProfileSchema, function(user)
+            return user.Connected
+        end, function() end)
+        JestGlobals.expect(manager:Load(player)).toBe(true)
+        local petUid = profile.Data.ChampionPetUid
+        local saved = manager:SetPetKnockedOutUntil(58, petUid, 200)
+        JestGlobals.expect(saved).toBe(true)
+        JestGlobals.expect(profile.Data.Pets[petUid].KnockedOutUntil).toBe(200)
+        local reset = manager:SetPetKnockedOutUntil(58, petUid, 0)
+        JestGlobals.expect(reset).toBe(true)
+        JestGlobals.expect(profile.Data.Pets[petUid].KnockedOutUntil).toBe(0)
+    end)
+
+    JestGlobals.it("preserves an existing pending hatch roll during migration", function()
+        local legacy = {
+            Version = 1,
+            Pets = {},
+            ChampionPetUid = "",
+            SpeedPoints = 0,
+            PendingHatchRolls = { egg_z1_slot_1 = { ConditionId = "Sturdy", Seed = 72 } },
+        }
+        local ok, result = ProfileSchema.Migrate(legacy, 59)
+        JestGlobals.expect(ok).toBe(true)
+        JestGlobals.expect((result :: any).PendingHatchRolls.egg_z1_slot_1)
+            .toEqual({ ConditionId = "Sturdy", Seed = 72 })
     end)
 end)

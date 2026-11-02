@@ -114,4 +114,21 @@ function DataService:GetProfileData(player: Player): any?
     return cloneAndFreeze(profile.Data)
 end
 
+function DataService:SetPetKnockedOutUntil(player: Player, petUid: string, untilTime: number): (boolean, string?)
+    return SessionManager:SetPetKnockedOutUntil(player.UserId, petUid, untilTime)
+end
+
+function DataService:GetOrCreateHatchRoll(
+    player: Player,
+    eggUid: string,
+    conditionId: string,
+    seed: number
+): (any?, string?)
+    return SessionManager:GetOrCreateHatchRoll(player.UserId, eggUid, conditionId, seed)
+end
+
+function DataService:ClearHatchRoll(userId: number, eggUid: string): (boolean, string?)
+    return SessionManager:ClearHatchRoll(userId, eggUid)
+end
+
 return DataService

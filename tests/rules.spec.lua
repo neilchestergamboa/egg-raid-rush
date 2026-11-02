@@ -12,6 +12,10 @@ local EggDamage = require(RulesFolder:WaitForChild("EggDamage") :: ModuleScript)
 local FightSim = require(RulesFolder:WaitForChild("FightSim") :: ModuleScript)
 local GuardSpeed = require(RulesFolder:WaitForChild("GuardSpeed") :: ModuleScript)
 local SpeedRank = require(RulesFolder:WaitForChild("SpeedRank") :: ModuleScript)
+local ConditionRoll = require(RulesFolder:WaitForChild("ConditionRoll") :: ModuleScript)
+local ConditionDefs = require(
+    ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("ConditionDefs") :: ModuleScript
+)
 
 local function expectError(callback: () -> ())
     local ok = pcall(callback)
@@ -65,6 +69,8 @@ JestGlobals.describe("FightSim", function()
         local result = FightSim.Simulate(120, 120, 20261102)
         JestGlobals.expect(result.DurationSeconds >= 9.5 and result.DurationSeconds <= 10.5).toBe(true)
         JestGlobals.expect(result.Ticks).toBe(result.DurationSeconds / 0.5)
+        JestGlobals.expect(#result.History).toBe(result.Ticks)
+        JestGlobals.expect(result.History[#result.History].ElapsedSeconds).toBe(result.DurationSeconds)
     end)
 
     JestGlobals.it("gives a half-power pet a loss in about five seconds", function()
@@ -113,6 +119,32 @@ JestGlobals.describe("FightSim", function()
         end)
         expectError(function()
             FightSim.Simulate(120, 120, -1)
+        end)
+    end)
+end)
+
+JestGlobals.describe("ConditionRoll", function()
+    JestGlobals.it("replays the same condition from a seed and produces configured conditions", function()
+        local counts = {}
+        local seeds = { 1, 5632, 6144, 7680, 12393 }
+        for _, seed in seeds do
+            local first = ConditionRoll.Roll(ConditionDefs, seed)
+            local replay = ConditionRoll.Roll(ConditionDefs, seed)
+            JestGlobals.expect(replay).toBe(first)
+            JestGlobals.expect(ConditionDefs[first] ~= nil).toBe(true)
+            counts[first] = (counts[first] or 0) + 1
+        end
+        for conditionId in pairs(ConditionDefs) do
+            JestGlobals.expect(counts[conditionId] > 0).toBe(true)
+        end
+    end)
+
+    JestGlobals.it("rejects invalid seeds and empty condition definitions", function()
+        expectError(function()
+            ConditionRoll.Roll(ConditionDefs, -1)
+        end)
+        expectError(function()
+            ConditionRoll.Roll({}, 1)
         end)
     end)
 end)

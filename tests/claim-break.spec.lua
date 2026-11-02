@@ -39,6 +39,7 @@ JestGlobals.describe("Claim validation", function()
             HasCharacter = true,
             IsWithinRange = true,
             IsCarryingCreature = false,
+            IsFighting = false,
             HasProfile = true,
             ChampionPet = { Power = 120, KnockedOutUntil = 0 },
             Now = 100,
@@ -61,6 +62,12 @@ JestGlobals.describe("Claim validation", function()
         context = validContext()
         context.EggObjectExists = false
         JestGlobals.expect(ClaimValidation.Validate(context)).toBe("EggObjectUnavailable")
+    end)
+
+    JestGlobals.it("blocks a second claim while the player already has an active fight", function()
+        local context = validContext()
+        context.IsFighting = true
+        JestGlobals.expect(ClaimValidation.Validate(context)).toBe("FightInProgress")
     end)
 
     JestGlobals.it("rejects out-of-range, carrying, unready, unequipped, and recovering players", function()

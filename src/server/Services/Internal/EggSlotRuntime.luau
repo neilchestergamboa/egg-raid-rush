@@ -27,6 +27,11 @@ export type EggSlotRecord = EggSlotDefinition & {
     ClaimantUserId: number?,
     ExpiresAt: number?,
     RespawnSourceState: "Lost" | "Banked"?,
+    ConditionRoll: string?,
+    ConditionSeed: number?,
+    ConditionRollOwnerUserId: number?,
+    ClaimedPetUid: string?,
+    ClaimedPetPower: number?,
 }
 
 export type EggSlotRuntime = {
@@ -37,6 +42,15 @@ export type EggSlotRuntime = {
     Transition: (self: EggSlotRuntime, uid: string, targetState: EggState) -> (boolean, string?),
     GetSlot: (self: EggSlotRuntime, uid: string) -> EggSlotRecord?,
     GetAllSlots: (self: EggSlotRuntime) -> { EggSlotRecord },
+    CommitHatch: (
+        self: EggSlotRuntime,
+        uid: string,
+        claimantUserId: number,
+        petUid: string,
+        petPower: number,
+        conditionId: string,
+        seed: number
+    ) -> (boolean, string?),
 }
 
 type RuntimeOptions = {
@@ -88,6 +102,11 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
             ClaimantUserId = nil,
             ExpiresAt = nil,
             RespawnSourceState = nil,
+            ConditionRoll = nil,
+            ConditionSeed = nil,
+            ConditionRollOwnerUserId = nil,
+            ClaimedPetUid = nil,
+            ClaimedPetPower = nil,
         }
         recordsByUid[record.Uid] = record
         table.insert(orderedUids, record.Uid)
@@ -110,6 +129,11 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
     local function beginRespawn(record: EggSlotRecord, sourceState: "Lost" | "Banked")
         record.ClaimantUserId = nil
         record.ExpiresAt = nil
+        record.ConditionRoll = nil
+        record.ConditionSeed = nil
+        record.ConditionRollOwnerUserId = nil
+        record.ClaimedPetUid = nil
+        record.ClaimedPetPower = nil
         commitState(record, sourceState, "EggConsumed")
         record.RespawnSourceState = sourceState
         record.ExpiresAt = options.Now() + record.RespawnSeconds
@@ -138,6 +162,38 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
         end
 
         options.Schedule(record.RespawnSeconds, finishRespawn)
+    end
+
+    function runtime:CommitHatch(
+        uid: string,
+        claimantUserId: number,
+        petUid: string,
+        petPower: number,
+        conditionId: string,
+        seed: number
+    ): (boolean, string?)
+        local record = getRecord(uid)
+        if record == nil then
+            return false, "EggNotFound"
+        end
+        if record.State ~= "Claimed" or record.ClaimantUserId ~= claimantUserId then
+            return false, "EggNotClaimedByPlayer"
+        end
+        if petUid == "" or not isFinite(petPower) or petPower <= 0 or conditionId == "" then
+            return false, "InvalidHatchCommit"
+        end
+        if not isFinite(seed) or seed < 0 or seed % 1 ~= 0 or seed > 0xFFFFFFFF then
+            return false, "InvalidConditionSeed"
+        end
+        if record.ConditionRoll == nil or record.ConditionRollOwnerUserId ~= claimantUserId then
+            record.ConditionRoll = conditionId
+            record.ConditionSeed = seed
+            record.ConditionRollOwnerUserId = claimantUserId
+        end
+        record.ClaimedPetUid = petUid
+        record.ClaimedPetPower = petPower
+        options.OnChanged(cloneRecord(record), record.State, "HatchConditionCommitted")
+        return true, nil
     end
 
     function runtime:SetExpiresAt(uid: string, expiresAt: number): (boolean, string?)
@@ -210,6 +266,8 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
         commitState(record, "Released", reason)
         record.ClaimantUserId = nil
         record.ExpiresAt = nil
+        record.ClaimedPetUid = nil
+        record.ClaimedPetPower = nil
         commitState(record, "Sealed", "ReleaseComplete")
         return true, nil
     end

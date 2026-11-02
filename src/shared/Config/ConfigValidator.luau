@@ -8,6 +8,7 @@ local Config = {
     RarityDefs = require(script.Parent:WaitForChild("RarityDefs")),
     ConditionDefs = require(script.Parent:WaitForChild("ConditionDefs")),
     EggInteractionDefs = require(script.Parent:WaitForChild("EggInteractionDefs")),
+    FightDefs = require(script.Parent:WaitForChild("FightDefs")),
 }
 
 type ConfigData = {
@@ -18,6 +19,7 @@ type ConfigData = {
     RarityDefs: any,
     ConditionDefs: any,
     EggInteractionDefs: any,
+    FightDefs: any,
 }
 
 local function validate(config: any): (boolean, string?)
@@ -36,10 +38,40 @@ local function validate(config: any): (boolean, string?)
         "RarityDefs",
         "ConditionDefs",
         "EggInteractionDefs",
+        "FightDefs",
     }) do
         if type(config[fieldName]) ~= "table" then
             return fail(fieldName .. " must be a table.")
         end
+    end
+    local fight = config.FightDefs
+    for _, fieldName in ipairs({
+        "TickSeconds",
+        "HealthPerPower",
+        "SnapshotIntervalSeconds",
+        "KnockoutRecoverySeconds",
+        "RetreatRateLimitSeconds",
+    }) do
+        if
+            type(fight[fieldName]) ~= "number"
+            or fight[fieldName] ~= fight[fieldName]
+            or fight[fieldName] <= 0
+            or fight[fieldName] == math.huge
+        then
+            return fail("FightDefs." .. fieldName .. " must be positive.")
+        end
+    end
+    if
+        type(fight.DamageVariance) ~= "number"
+        or fight.DamageVariance ~= fight.DamageVariance
+        or fight.DamageVariance < 0
+        or fight.DamageVariance >= 1
+        or fight.DamageVariance == math.huge
+    then
+        return fail("FightDefs.DamageVariance must be in [0, 1).")
+    end
+    if fight.SnapshotIntervalSeconds > fight.TickSeconds then
+        return fail("FightDefs.SnapshotIntervalSeconds cannot exceed TickSeconds.")
     end
 
     local interaction = config.EggInteractionDefs

@@ -11,6 +11,33 @@ local function publish(target: Instance, record: any)
     target:SetAttribute("State", record.State)
     target:SetAttribute("ClaimantUserId", record.ClaimantUserId)
     target:SetAttribute("ExpiresAt", record.ExpiresAt)
+    if record.State == "Fighting" or record.State == "Won" or record.State == "Carried" or record.State == "Banked" then
+        target:SetAttribute("ConditionRoll", record.ConditionRoll)
+    else
+        target:SetAttribute("ConditionRoll", nil)
+    end
+    if
+        record.State ~= "Fighting"
+        and record.State ~= "Won"
+        and record.State ~= "Carried"
+        and record.State ~= "Banked"
+    then
+        for _, attributeName in
+            {
+                "FightElapsedSeconds",
+                "FightDurationSeconds",
+                "PetHp",
+                "PetMaxHp",
+                "HatchlingHp",
+                "HatchlingMaxHp",
+                "FightSeed",
+                "FightStatus",
+                "FightResult",
+            }
+        do
+            target:SetAttribute(attributeName, nil)
+        end
+    end
 
     if record.State ~= "Breaking" then
         target:SetAttribute("Health", nil)

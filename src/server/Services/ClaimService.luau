@@ -29,6 +29,7 @@ type ResultCode =
     | "ProfileNotReady"
     | "NoPetEquipped"
     | "PetRecovering"
+    | "FightInProgress"
     | "InvalidPet"
     | "RateLimited"
     | "ServerError"
@@ -42,6 +43,7 @@ type PendingClaim = {
 local ClaimService = Framework.CreateService({ Name = "ClaimService", Client = {} })
 local eggService: any = nil
 local eggBreakService: any = nil
+local fightService: any = nil
 local dataService: any = nil
 local rateLimiter = PlayerRateLimiter.new(EggInteractionDefs.RequestRateLimitSeconds)
 local pendingByEggUid: { [string]: { PendingClaim } } = {}
@@ -114,6 +116,7 @@ local function validateRequest(player: Player, eggUid: string): (ResultCode, num
         HasCharacter = hasCharacter,
         IsWithinRange = isWithinRange,
         IsCarryingCreature = player:GetAttribute("IsCarryingCreature") == true,
+        IsFighting = fightService:IsUserFighting(player.UserId),
         HasProfile = profile ~= nil,
         ChampionPet = getChampionPet(profile),
         Now = Workspace:GetServerTimeNow(),
@@ -159,6 +162,13 @@ local function startClaim(player: Player, eggUid: string): ResultCode
     end
 
     trackClaim(player, eggUid)
+    local hatchCommitted, hatchError = fightService:CommitCondition(eggUid, player.UserId)
+    if not hatchCommitted then
+        eggService:ReleaseClaim(eggUid, "HatchConditionCommitFailed")
+        untrackClaim(player.UserId, eggUid)
+        warn("[ClaimService] Could not commit hatch roll for " .. eggUid .. ": " .. tostring(hatchError))
+        return "ServerError"
+    end
     local expiresAt = Workspace:GetServerTimeNow() + EggInteractionDefs.ClaimTimeoutSeconds
     local leaseStarted, leaseError = leases:Start(eggUid, player.UserId, expiresAt)
     if not leaseStarted then
@@ -293,6 +303,7 @@ end
 function ClaimService:KnitStart()
     eggService = Framework.GetService("EggService")
     eggBreakService = Framework.GetService("EggBreakService")
+    fightService = Framework.GetService("FightService")
     dataService = Framework.GetService("DataService")
 
     Network.RequestEgg.SetCallback(function(player: Player, eggUid: string): ResultCode

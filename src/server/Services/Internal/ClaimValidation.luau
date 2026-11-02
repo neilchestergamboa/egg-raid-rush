@@ -11,6 +11,7 @@ export type ResultCode =
     | "ProfileNotReady"
     | "NoPetEquipped"
     | "PetRecovering"
+    | "FightInProgress"
     | "InvalidPet"
 
 export type Context = {
@@ -20,6 +21,7 @@ export type Context = {
     HasCharacter: boolean,
     IsWithinRange: boolean,
     IsCarryingCreature: boolean,
+    IsFighting: boolean,
     HasProfile: boolean,
     ChampionPet: any?,
     Now: number,
@@ -47,6 +49,9 @@ local function validate(context: Context): (ResultCode, number?)
     end
     if context.IsCarryingCreature then
         return "CarryingCreature", nil
+    end
+    if context.IsFighting then
+        return "FightInProgress", nil
     end
     if not context.HasProfile then
         return "ProfileNotReady", nil
