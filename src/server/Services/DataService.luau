@@ -72,6 +72,11 @@ local function loadPlayer(player: Player)
                     .. tostring(loadError)
             )
             player:Kick("Your data could not load safely. Please rejoin.")
+        elseif loaded then
+            local profile = SessionManager:GetProfile(player.UserId)
+            if profile ~= nil then
+                player:SetAttribute("TutorialCompleted", profile.Data.TutorialCompleted == true)
+            end
         end
     end)
 end
@@ -132,6 +137,18 @@ end
 
 function DataService:ClearHatchRoll(userId: number, eggUid: string): (boolean, string?)
     return SessionManager:ClearHatchRoll(userId, eggUid)
+end
+
+function DataService:CompleteTutorial(player: Player): (boolean, string?)
+    local completed, completeError = SessionManager:CompleteTutorial(player.UserId)
+    if completed then
+        player:SetAttribute("TutorialCompleted", true)
+    end
+    return completed, completeError
+end
+
+function DataService:ConsumeTutorialFirstDropForgiveness(player: Player): (boolean, string?)
+    return SessionManager:ConsumeTutorialFirstDropForgiveness(player.UserId)
 end
 
 function DataService:GrantCapturedPet(

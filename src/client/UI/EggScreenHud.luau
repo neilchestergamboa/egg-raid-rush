@@ -23,6 +23,7 @@ export type PromptHudState = {
 export type EggScreenHud = {
     SetPrompt: (self: EggScreenHud, state: PromptHudState) -> (),
     SetFight: (self: EggScreenHud, state: FightHudState) -> (),
+    SetTutorial: (self: EggScreenHud, text: string?) -> (),
     SetStatus: (self: EggScreenHud, text: string?) -> (),
     Destroy: (self: EggScreenHud) -> (),
 }
@@ -99,6 +100,35 @@ local function create(playerGui: PlayerGui, callbacks: EggScreenHudCallbacks): E
     fightPanel.Size = UDim2.fromOffset(360, 102)
     fightPanel.Visible = false
     fightPanel.Parent = screenGui
+
+    local tutorialBanner = Instance.new("TextLabel")
+    tutorialBanner.Name = "TutorialGuidance"
+    tutorialBanner.AnchorPoint = Vector2.new(0.5, 0)
+    tutorialBanner.BackgroundColor3 = HudTheme.PanelColor
+    tutorialBanner.BackgroundTransparency = 0.12
+    tutorialBanner.Font = Enum.Font.GothamBold
+    tutorialBanner.Position = UDim2.new(0.5, 0, 0, 128)
+    tutorialBanner.Size = UDim2.new(0.8, 0, 0, 48)
+    tutorialBanner.Text = ""
+    tutorialBanner.TextColor3 = HudTheme.PromptColor
+    tutorialBanner.TextScaled = true
+    tutorialBanner.TextWrapped = true
+    tutorialBanner.Visible = false
+    tutorialBanner.Parent = screenGui
+
+    local tutorialConstraint = Instance.new("UISizeConstraint")
+    tutorialConstraint.MinSize = Vector2.new(240, 44)
+    tutorialConstraint.MaxSize = Vector2.new(520, 56)
+    tutorialConstraint.Parent = tutorialBanner
+
+    local tutorialCorner = Instance.new("UICorner")
+    tutorialCorner.CornerRadius = UDim.new(0, 12)
+    tutorialCorner.Parent = tutorialBanner
+
+    local tutorialStroke = Instance.new("UIStroke")
+    tutorialStroke.Color = HudTheme.AccentColor
+    tutorialStroke.Thickness = 2
+    tutorialStroke.Parent = tutorialBanner
 
     local fightCorner = Instance.new("UICorner")
     fightCorner.CornerRadius = UDim.new(0, 12)
@@ -228,6 +258,11 @@ local function create(playerGui: PlayerGui, callbacks: EggScreenHudCallbacks): E
         end
         setBar(petFill, petLabel, state.PetName, state.PetHp, state.PetMaxHp)
         setBar(hatchFill, hatchLabel, state.HatchlingName, state.HatchlingHp, state.HatchlingMaxHp)
+    end
+
+    function hud:SetTutorial(text: string?)
+        tutorialBanner.Visible = text ~= nil and text ~= ""
+        tutorialBanner.Text = text or ""
     end
 
     function hud:SetStatus(text: string?)

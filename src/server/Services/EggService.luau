@@ -57,19 +57,6 @@ local function createSlotDefinitions(): { any }
                 IsTutorial = egg.IsTutorial,
             })
         end
-
-        local tutorialEggDefId = zone.TutorialEggDefId
-        local tutorialEgg = EggDefs[tutorialEggDefId]
-        local tutorialRarity = RarityDefs[tutorialEgg.RarityId]
-        table.insert(slotDefinitions, {
-            Uid = tutorialEggDefId,
-            DefId = tutorialEggDefId,
-            ZoneId = tutorialEgg.ZoneId,
-            Slot = tutorialEgg.Slot,
-            RarityId = tutorialEgg.RarityId,
-            RespawnSeconds = tutorialRarity.RespawnSeconds,
-            IsTutorial = tutorialEgg.IsTutorial,
-        })
     end
     return slotDefinitions
 end

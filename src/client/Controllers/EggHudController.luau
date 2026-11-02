@@ -10,6 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Framework = require(Shared:WaitForChild("Framework") :: ModuleScript)
 local ConfigFolder = Shared:WaitForChild("Config")
 local EggDefs = require(ConfigFolder:WaitForChild("EggDefs") :: ModuleScript)
+local ZoneDefs = require(ConfigFolder:WaitForChild("ZoneDefs") :: ModuleScript)
 local PetDefs = require(ConfigFolder:WaitForChild("PetDefs") :: ModuleScript)
 local ConditionDefs = require(ConfigFolder:WaitForChild("ConditionDefs") :: ModuleScript)
 local EggInteractionDefs = require(ConfigFolder:WaitForChild("EggInteractionDefs") :: ModuleScript)
@@ -48,6 +49,7 @@ type FightActionResult = "Retreated" | "FightNotActive" | "RateLimited" | "Serve
 
 type SlotView = {
     Uid: string,
+    DefId: string?,
     State: string?,
     ClaimantUserId: number?,
     Health: number?,
@@ -172,6 +174,7 @@ local function collectSlots(root: Folder): { SlotView }
             end
             table.insert(slots, {
                 Uid = slotFolder.Name,
+                DefId = asString(slotFolder:GetAttribute("DefId")),
                 State = asString(slotFolder:GetAttribute("State")),
                 ClaimantUserId = asNumber(slotFolder:GetAttribute("ClaimantUserId")),
                 Health = asNumber(slotFolder:GetAttribute("Health")),
@@ -190,8 +193,8 @@ local function collectSlots(root: Folder): { SlotView }
     return slots
 end
 
-local function hatchlingName(eggUid: string, conditionId: string?): string
-    local egg = EggDefs[eggUid]
+local function hatchlingName(eggUid: string, conditionId: string?, defId: string?): string
+    local egg = EggDefs[defId or eggUid]
     local petName = "Hatchling"
     if type(egg) == "table" then
         local pet = PetDefs[egg.PetDefId]
@@ -351,6 +354,9 @@ function EggHudController:KnitStart()
         local localFight: SlotView? = nil
         local fightIntensity = 0
         local fightAudible = false
+        local tutorialEggBreaking = false
+        local closestCommonSealedDistance = math.huge
+        local closestCommonSealed: SlotView? = nil
 
         for _, slot in slots do
             local adornee = adornees[slot.Uid]
@@ -367,7 +373,7 @@ function EggHudController:KnitStart()
                 HatchlingHp = slot.HatchlingHp,
                 HatchlingMaxHp = slot.HatchlingMaxHp,
                 PetName = claimantName(slot.ClaimantUserId),
-                HatchlingName = hatchlingName(slot.Uid, slot.ConditionRoll),
+                HatchlingName = hatchlingName(slot.Uid, slot.ConditionRoll, slot.DefId),
                 Adornee = adornee,
             })
 
@@ -378,6 +384,9 @@ function EggHudController:KnitStart()
 
             if slot.State == "Fighting" and slot.ClaimantUserId == player.UserId then
                 localFight = slot
+            end
+            if slot.State == "Breaking" and slot.ClaimantUserId == player.UserId then
+                tutorialEggBreaking = true
             end
             if slot.State == "Fighting" and distance <= HudTheme.NearbyAudioStuds then
                 fightAudible = true
@@ -403,6 +412,17 @@ function EggHudController:KnitStart()
                     closestSealedDistance = distance
                     closestSealed = slot
                 end
+            end
+            local eggDefinition = EggDefs[slot.DefId or slot.Uid]
+            if
+                slot.State == "Sealed"
+                and type(eggDefinition) == "table"
+                and eggDefinition.ZoneId == ZoneDefs.Zone1.Id
+                and eggDefinition.RarityId == "Common"
+                and distance < closestCommonSealedDistance
+            then
+                closestCommonSealedDistance = distance
+                closestCommonSealed = slot
             end
         end
 
@@ -445,11 +465,29 @@ function EggHudController:KnitStart()
             ActionText = actionText,
         })
 
+        local tutorialText: string? = nil
+        if player:GetAttribute("TutorialCompleted") ~= true then
+            if carrying then
+                tutorialText = "Carry your new creature through the Safe Gate!"
+            elseif localFight ~= nil then
+                tutorialText = "Win the battle to claim your first creature!"
+            elseif tutorialEggBreaking then
+                tutorialText = "Your Champion is breaking the egg!"
+            elseif
+                closestCommonSealed ~= nil and closestCommonSealedDistance <= EggInteractionDefs.ClaimDistanceStuds
+            then
+                tutorialText = "Press E to battle this Common egg!"
+            else
+                tutorialText = "Head to Zone 1 and battle any Common egg."
+            end
+        end
+        screenHud:SetTutorial(tutorialText)
+
         if localFight ~= nil then
             screenHud:SetFight({
                 Visible = true,
                 PetName = "Champion",
-                HatchlingName = hatchlingName(localFight.Uid, localFight.ConditionRoll),
+                HatchlingName = hatchlingName(localFight.Uid, localFight.ConditionRoll, localFight.DefId),
                 PetHp = localFight.PetHp or 0,
                 PetMaxHp = localFight.PetMaxHp or 1,
                 HatchlingHp = localFight.HatchlingHp or 0,

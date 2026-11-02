@@ -21,6 +21,8 @@ export type ProfileSessionManager = {
     ) -> (any?, string?),
     ClearHatchRoll: (self: ProfileSessionManager, userId: number, eggUid: string) -> (boolean, string?),
     GrantPet: (self: ProfileSessionManager, userId: number, petUid: string, petData: any) -> (boolean, string?),
+    CompleteTutorial: (self: ProfileSessionManager, userId: number) -> (boolean, string?),
+    ConsumeTutorialFirstDropForgiveness: (self: ProfileSessionManager, userId: number) -> (boolean, string?),
 }
 
 type SessionRecord = {
@@ -228,6 +230,28 @@ local function new(
             return false, "PetUidConflict"
         end
         pets[petUid] = table.clone(petData)
+        return true, nil
+    end
+
+    function manager:CompleteTutorial(userId: number): (boolean, string?)
+        local record = profilesByUserId[userId]
+        if record == nil or not record.Profile:IsActive() then
+            return false, "ProfileNotLoaded"
+        end
+        record.Profile.Data.TutorialCompleted = true
+        return true, nil
+    end
+
+    function manager:ConsumeTutorialFirstDropForgiveness(userId: number): (boolean, string?)
+        local record = profilesByUserId[userId]
+        if record == nil or not record.Profile:IsActive() then
+            return false, "ProfileNotLoaded"
+        end
+        local data = record.Profile.Data
+        if data.TutorialFirstDropForgiven then
+            return false, "AlreadyForgiven"
+        end
+        data.TutorialFirstDropForgiven = true
         return true, nil
     end
 

@@ -7,7 +7,7 @@ local PetDefs = require(ConfigFolder:WaitForChild("PetDefs") :: ModuleScript)
 local ConditionDefs = require(ConfigFolder:WaitForChild("ConditionDefs") :: ModuleScript)
 local PetPower = require(RulesFolder:WaitForChild("PetPower") :: ModuleScript)
 
-local CURRENT_VERSION = 2
+local CURRENT_VERSION = 3
 local STARTER_PET_DEF_ID = "pet_jackal_pup"
 local STARTER_CONDITION_ID = "Sturdy"
 
@@ -26,6 +26,8 @@ export type ProfileData = {
     ChampionPetUid: string,
     SpeedPoints: number,
     PendingHatchRolls: { [string]: { ConditionId: string, Seed: number } },
+    TutorialCompleted: boolean,
+    TutorialFirstDropForgiven: boolean,
 }
 
 local function isFinite(value: number): boolean
@@ -94,6 +96,8 @@ local function createTemplate(): ProfileData
         ChampionPetUid = "",
         SpeedPoints = 0,
         PendingHatchRolls = {},
+        TutorialCompleted = false,
+        TutorialFirstDropForgiven = false,
     }
 end
 
@@ -146,6 +150,18 @@ local function migrate(source: any, userId: number): (boolean, ProfileData | str
     if type(pendingHatchRolls) ~= "table" then
         return false, "PendingHatchRolls must be a table."
     end
+    local tutorialCompleted = source.TutorialCompleted
+    if tutorialCompleted == nil then
+        tutorialCompleted = false
+    elseif type(tutorialCompleted) ~= "boolean" then
+        return false, "TutorialCompleted must be a boolean."
+    end
+    local tutorialFirstDropForgiven = source.TutorialFirstDropForgiven
+    if tutorialFirstDropForgiven == nil then
+        tutorialFirstDropForgiven = false
+    elseif type(tutorialFirstDropForgiven) ~= "boolean" then
+        return false, "TutorialFirstDropForgiven must be a boolean."
+    end
     for eggUid, roll in pairs(pendingHatchRolls) do
         if
             type(eggUid) ~= "string"
@@ -170,6 +186,8 @@ local function migrate(source: any, userId: number): (boolean, ProfileData | str
     migrated.SpeedPoints = sourceSpeedPoints
     migrated.PendingHatchRolls = table.clone(pendingHatchRolls)
     migrated.ChampionPetUid = sourceChampionUid or ""
+    migrated.TutorialCompleted = tutorialCompleted
+    migrated.TutorialFirstDropForgiven = tutorialFirstDropForgiven
 
     if next(migrated.Pets) == nil then
         local starterUid = "starter-" .. tostring(userId)

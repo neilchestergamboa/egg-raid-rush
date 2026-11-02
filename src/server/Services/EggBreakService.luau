@@ -104,7 +104,7 @@ function EggBreakService:StartBreak(player: Player, eggUid: string, petPower: nu
         return false, "EggBreakAlreadyRunning"
     end
     local slot = eggService:GetSlot(eggUid)
-    local egg = EggDefs[eggUid]
+    local egg = if slot == nil then nil else EggDefs[slot.DefId]
     if slot == nil or type(egg) ~= "table" then
         return false, "EggNotFound"
     end
