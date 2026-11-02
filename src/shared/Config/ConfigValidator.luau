@@ -10,6 +10,7 @@ local Config = {
     EggInteractionDefs = require(script.Parent:WaitForChild("EggInteractionDefs")),
     FightDefs = require(script.Parent:WaitForChild("FightDefs")),
     CarryDefs = require(script.Parent:WaitForChild("CarryDefs")),
+    TutorialDefs = require(script.Parent:WaitForChild("TutorialDefs")),
 }
 
 type ConfigData = {
@@ -22,6 +23,7 @@ type ConfigData = {
     EggInteractionDefs: any,
     FightDefs: any,
     CarryDefs: any,
+    TutorialDefs: any,
 }
 
 local function validate(config: any): (boolean, string?)
@@ -42,6 +44,7 @@ local function validate(config: any): (boolean, string?)
         "EggInteractionDefs",
         "FightDefs",
         "CarryDefs",
+        "TutorialDefs",
     }) do
         if type(config[fieldName]) ~= "table" then
             return fail(fieldName .. " must be a table.")
@@ -297,6 +300,23 @@ local function validate(config: any): (boolean, string?)
     local common = config.RarityDefs.Common
     if type(common) ~= "table" or type(common.PowerMultiplier) ~= "number" or common.PowerMultiplier <= 0 then
         return fail("RarityDefs.Common.PowerMultiplier must be positive for Zone 1 Common eggs.")
+    end
+
+    local firstRaid = config.TutorialDefs.FirstRaid
+    if type(firstRaid) ~= "table" then
+        return fail("TutorialDefs.FirstRaid must be a table.")
+    end
+    if firstRaid.ZoneId ~= zone.Id or firstRaid.RarityId ~= "Common" or commonEggCount == 0 then
+        return fail("TutorialDefs.FirstRaid must target a Zone 1 Common egg.")
+    end
+    if
+        type(firstRaid.HatchlingPowerRatio) ~= "number"
+        or firstRaid.HatchlingPowerRatio ~= firstRaid.HatchlingPowerRatio
+        or firstRaid.HatchlingPowerRatio <= 0
+        or firstRaid.HatchlingPowerRatio > 0.5
+        or firstRaid.HatchlingPowerRatio == math.huge
+    then
+        return fail("TutorialDefs.FirstRaid.HatchlingPowerRatio must be in (0, 0.5].")
     end
 
     return true, nil
