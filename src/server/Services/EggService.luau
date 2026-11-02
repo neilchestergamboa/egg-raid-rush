@@ -211,6 +211,40 @@ function EggService:CommitHatch(
     return runtime:CommitHatch(eggUid, claimantUserId, petUid, petPower, conditionId, seed)
 end
 
+function EggService:AssignCreatureUid(eggUid: string, claimantUserId: number, creatureUid: string): (string?, string?)
+    if runtime == nil then
+        return nil, "EggServiceNotReady"
+    end
+    return runtime:AssignCreatureUid(eggUid, claimantUserId, creatureUid)
+end
+
+function EggService:SetCarrier(eggUid: string, userId: number, creatureUid: string): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    return runtime:SetCarrier(eggUid, userId, creatureUid)
+end
+
+function EggService:DropCreature(
+    eggUid: string,
+    userId: number,
+    position: Vector3,
+    dropExpiresAt: number,
+    lockoutUntil: number
+): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    return runtime:DropCreature(eggUid, userId, position, dropExpiresAt, lockoutUntil)
+end
+
+function EggService:ReturnCreature(eggUid: string): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    return runtime:ReturnCreature(eggUid)
+end
+
 function EggService:SetFightSnapshot(eggUid: string, snapshot: any): (boolean, string?)
     if runtime == nil then
         return false, "EggServiceNotReady"

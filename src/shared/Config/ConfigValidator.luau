@@ -9,6 +9,7 @@ local Config = {
     ConditionDefs = require(script.Parent:WaitForChild("ConditionDefs")),
     EggInteractionDefs = require(script.Parent:WaitForChild("EggInteractionDefs")),
     FightDefs = require(script.Parent:WaitForChild("FightDefs")),
+    CarryDefs = require(script.Parent:WaitForChild("CarryDefs")),
 }
 
 type ConfigData = {
@@ -20,6 +21,7 @@ type ConfigData = {
     ConditionDefs: any,
     EggInteractionDefs: any,
     FightDefs: any,
+    CarryDefs: any,
 }
 
 local function validate(config: any): (boolean, string?)
@@ -39,6 +41,7 @@ local function validate(config: any): (boolean, string?)
         "ConditionDefs",
         "EggInteractionDefs",
         "FightDefs",
+        "CarryDefs",
     }) do
         if type(config[fieldName]) ~= "table" then
             return fail(fieldName .. " must be a table.")
@@ -72,6 +75,43 @@ local function validate(config: any): (boolean, string?)
     end
     if fight.SnapshotIntervalSeconds > fight.TickSeconds then
         return fail("FightDefs.SnapshotIntervalSeconds cannot exceed TickSeconds.")
+    end
+
+    local carry = config.CarryDefs
+    for _, fieldName in ipairs({
+        "GuardWakeGraceSeconds",
+        "DropLifetimeSeconds",
+        "PickupHoldSeconds",
+        "PickupDistanceStuds",
+        "GuardTagDistanceStuds",
+        "RuntimeUpdateIntervalSeconds",
+        "CarrierSpeedMultiplier",
+        "CarryVisualSize",
+        "DropVisualSize",
+        "GuardVisualSize",
+    }) do
+        if
+            type(carry[fieldName]) ~= "number"
+            or carry[fieldName] ~= carry[fieldName]
+            or carry[fieldName] <= 0
+            or carry[fieldName] == math.huge
+        then
+            return fail("CarryDefs." .. fieldName .. " must be positive.")
+        end
+    end
+    if
+        type(carry.PreviousCarrierLockoutSeconds) ~= "number"
+        or carry.PreviousCarrierLockoutSeconds ~= carry.PreviousCarrierLockoutSeconds
+        or carry.PreviousCarrierLockoutSeconds < 0
+        or carry.PreviousCarrierLockoutSeconds == math.huge
+    then
+        return fail("CarryDefs.PreviousCarrierLockoutSeconds must be finite and non-negative.")
+    end
+    if carry.CarrierSpeedMultiplier > 1 then
+        return fail("CarryDefs.CarrierSpeedMultiplier must be in (0, 1].")
+    end
+    if typeof(carry.CarryVisualOffset) ~= "Vector3" then
+        return fail("CarryDefs.CarryVisualOffset must be a Vector3.")
     end
 
     local interaction = config.EggInteractionDefs

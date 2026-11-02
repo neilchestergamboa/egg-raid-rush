@@ -138,6 +138,9 @@ if not RunService:IsRunning() then
 		RequestEgg = table.freeze({
 			Call = noop
 		}),
+		PickupCreature = table.freeze({
+			Call = noop
+		}),
 	}) :: Events
 end
 local remotes = ReplicatedStorage:WaitForChild("ZAP")
@@ -145,8 +148,9 @@ local remotes = ReplicatedStorage:WaitForChild("ZAP")
 local reliable = remotes:WaitForChild("ZAP_RELIABLE")
 assert(reliable:IsA("RemoteEvent"), "Expected ZAP_RELIABLE to be a RemoteEvent")
 
-export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
 export type FightActionResultCode = ("Retreated" | "FightNotActive" | "RateLimited" | "ServerError")
+export type CarryActionResultCode = ("PickedUp" | "CreatureNotFound" | "CreatureUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "PickupLockedOut" | "DropExpired" | "RateLimited" | "ServerError")
+export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
 
 local function SendEvents()
 	if outgoing_used ~= 0 then
@@ -164,11 +168,12 @@ end
 
 RunService.Heartbeat:Connect(SendEvents)
 
-local reliable_events = table.create(2)
-local reliable_event_queue: { [number]: { any } } = table.create(2)
+local reliable_events = table.create(3)
+local reliable_event_queue: { [number]: { any } } = table.create(3)
 local function_call_id = 0
 reliable_event_queue[1] = table.create(255)
 reliable_event_queue[0] = table.create(255)
+reliable_event_queue[2] = table.create(255)
 reliable.OnClientEvent:Connect(function(buff, inst)
 	incoming_buff = buff
 	incoming_inst = inst
@@ -237,6 +242,37 @@ reliable.OnClientEvent:Connect(function(buff, inst)
 				task.spawn(thread, value)
 			end
 			reliable_event_queue[0][call_id] = nil
+		elseif id == 2 then -- PickupCreature
+			local call_id = buffer.readu8(incoming_buff, read(1))
+			local value
+			local bool_3 = buffer.readu16(incoming_buff, read(2))
+			if bit32.btest(bool_3, 0b0000000000000001) then
+				value = "PickedUp"
+			elseif bit32.btest(bool_3, 0b0000000000000010) then
+				value = "CreatureNotFound"
+			elseif bit32.btest(bool_3, 0b0000000000000100) then
+				value = "CreatureUnavailable"
+			elseif bit32.btest(bool_3, 0b0000000000001000) then
+				value = "NoCharacter"
+			elseif bit32.btest(bool_3, 0b0000000000010000) then
+				value = "TooFar"
+			elseif bit32.btest(bool_3, 0b0000000000100000) then
+				value = "CarryingCreature"
+			elseif bit32.btest(bool_3, 0b0000000001000000) then
+				value = "PickupLockedOut"
+			elseif bit32.btest(bool_3, 0b0000000010000000) then
+				value = "DropExpired"
+			elseif bit32.btest(bool_3, 0b0000000100000000) then
+				value = "RateLimited"
+			elseif bit32.btest(bool_3, 0b0000001000000000) then
+				value = "ServerError"
+			end
+			local thread = reliable_event_queue[2][call_id]
+			-- When using actors it's possible for multiple Zap clients to exist, but only one called the Zap remote function.
+			if thread then
+				task.spawn(thread, value)
+			end
+			reliable_event_queue[2][call_id] = nil
 		else
 			error("Unknown event id")
 		end
@@ -292,6 +328,30 @@ local returns = {
 			alloc(len_2)
 			buffer.writestring(outgoing_buff, outgoing_apos, eggUid, len_2)
 			reliable_event_queue[0][function_call_id] = coroutine.running()
+			return coroutine.yield()
+		end,
+	},
+	PickupCreature = {
+		Call = function(eggUid: (string)): (("PickedUp" | "CreatureNotFound" | "CreatureUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "PickupLockedOut" | "DropExpired" | "RateLimited" | "ServerError"))
+			function_call_id += 1
+			function_call_id %= 256
+			if reliable_event_queue[2][function_call_id] then
+				function_call_id -= 1
+				error("Zap has more than 256 calls awaiting a response, and therefore this packet has been dropped")
+			end
+			alloc(1)
+			buffer.writeu8(outgoing_buff, outgoing_apos, 2)
+			alloc(1)
+			buffer.writeu8(outgoing_buff, outgoing_apos, function_call_id)
+			local len_3 = #eggUid
+			assert(len_3 >= 1, "value is less than 1!")
+			assert(len_3 <= 256, "value is more than 256!")
+			assert(utf8.len(eggUid) ~= nil, "value is not valid utf-8")
+			alloc(1)
+			buffer.writeu8(outgoing_buff, outgoing_apos, len_3 - 1)
+			alloc(len_3)
+			buffer.writestring(outgoing_buff, outgoing_apos, eggUid, len_3)
+			reliable_event_queue[2][function_call_id] = coroutine.running()
 			return coroutine.yield()
 		end,
 	},

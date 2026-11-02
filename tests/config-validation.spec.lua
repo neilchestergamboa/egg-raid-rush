@@ -18,11 +18,13 @@ local function copyConfig()
         ConditionDefs = table.clone(require(ConfigFolder:WaitForChild("ConditionDefs"))),
         EggInteractionDefs = table.clone(require(ConfigFolder:WaitForChild("EggInteractionDefs"))),
         FightDefs = table.clone(require(ConfigFolder:WaitForChild("FightDefs"))),
+        CarryDefs = table.clone(require(ConfigFolder:WaitForChild("CarryDefs"))),
     }
     config.ZoneDefs.Zone1 = table.clone(config.ZoneDefs.Zone1)
     config.ZoneDefs.Zone1.EggDefIds = table.clone(config.ZoneDefs.Zone1.EggDefIds)
     config.EggInteractionDefs = table.clone(config.EggInteractionDefs)
     config.EggInteractionDefs.CrackHealthThresholds = table.clone(config.EggInteractionDefs.CrackHealthThresholds)
+    config.CarryDefs = table.clone(config.CarryDefs)
     return config
 end
 
@@ -87,5 +89,15 @@ JestGlobals.describe("Zone 1 shared config validation", function()
         JestGlobals.expect(isValid).toBe(false)
         JestGlobals.expect(message)
             .toBe("Shared config validation failed: EggInteractionDefs.ClaimDistanceStuds must be positive.")
+    end)
+
+    JestGlobals.it("rejects a carry speed penalty multiplier above one", function()
+        local config = copyConfig()
+        config.CarryDefs.CarrierSpeedMultiplier = 1.1
+
+        local isValid, message = Validator.Validate(config)
+        JestGlobals.expect(isValid).toBe(false)
+        JestGlobals.expect(message)
+            .toBe("Shared config validation failed: CarryDefs.CarrierSpeedMultiplier must be in (0, 1].")
     end)
 end)

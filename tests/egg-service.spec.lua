@@ -253,6 +253,52 @@ JestGlobals.describe("EggSlotRuntime", function()
         JestGlobals.expect(runtime:GetSlot(eggUid).State).toBe("Sealed")
     end)
 
+    JestGlobals.it("assigns a stable creature id, drops it, and permits one new carrier", function()
+        local runtime, _, published = makeRuntime()
+        local eggUid = ZoneDefs.Zone1.EggDefIds[1]
+        runtime:TryClaim(eggUid, 101)
+        runtime:Transition(eggUid, "Breaking")
+        runtime:Transition(eggUid, "Fighting")
+        runtime:Transition(eggUid, "Won")
+
+        local creatureUid = runtime:AssignCreatureUid(eggUid, 101, "capture-abc")
+        local duplicateUid = runtime:AssignCreatureUid(eggUid, 101, "capture-other")
+        JestGlobals.expect(creatureUid).toBe("capture-abc")
+        JestGlobals.expect(duplicateUid).toBe("capture-abc")
+        JestGlobals.expect(runtime:SetCarrier(eggUid, 101, "capture-abc")).toBe(true)
+        local dropped = runtime:DropCreature(eggUid, 101, Vector3.new(4, 0, 1), 130, 113)
+        JestGlobals.expect(dropped).toBe(true)
+        local slot = runtime:GetSlot(eggUid)
+        JestGlobals.expect(slot.State).toBe("Dropped")
+        JestGlobals.expect(slot.PreviousCarrierUserId).toBe(101)
+        JestGlobals.expect(slot.DropPosition).toBe(Vector3.new(4, 0, 1))
+
+        JestGlobals.expect(runtime:SetCarrier(eggUid, 202, "capture-abc")).toBe(true)
+        slot = runtime:GetSlot(eggUid)
+        JestGlobals.expect(slot.State).toBe("Carried")
+        JestGlobals.expect(slot.CarrierUserId).toBe(202)
+        JestGlobals.expect(slot.CreatureUid).toBe("capture-abc")
+        JestGlobals.expect(published[#published].CarrierUserId).toBe(202)
+    end)
+
+    JestGlobals.it("returns a carried creature to the field idempotently on disconnect", function()
+        local runtime = makeRuntime()
+        local eggUid = ZoneDefs.Zone1.EggDefIds[1]
+        runtime:TryClaim(eggUid, 101)
+        runtime:Transition(eggUid, "Breaking")
+        runtime:Transition(eggUid, "Fighting")
+        runtime:Transition(eggUid, "Won")
+        runtime:AssignCreatureUid(eggUid, 101, "capture-return")
+        runtime:SetCarrier(eggUid, 101, "capture-return")
+
+        JestGlobals.expect(runtime:ReturnCreature(eggUid)).toBe(true)
+        JestGlobals.expect(runtime:ReturnCreature(eggUid)).toBe(true)
+        local slot = runtime:GetSlot(eggUid)
+        JestGlobals.expect(slot.State).toBe("Sealed")
+        JestGlobals.expect(slot.CreatureUid).toBe(nil)
+        JestGlobals.expect(slot.ConditionRoll).toBe(nil)
+    end)
+
     JestGlobals.it(
         "keeps one player's committed condition through release and prevents another player's reroll",
         function()
