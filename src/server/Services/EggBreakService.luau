@@ -19,6 +19,7 @@ local EggBreak = require(RulesFolder:WaitForChild("EggBreak") :: ModuleScript)
 local EggBreakService = Framework.CreateService({ Name = "EggBreakService", Client = {} })
 local eggService: any = nil
 local claimService: any = nil
+local fightService: any = nil
 local activeBreaks: { [string]: any } = {}
 
 local function findZoneRecommendedPetPower(zoneId: number): number?
@@ -78,6 +79,11 @@ local function runBreak(eggUid: string, run: any)
                 break
             end
             claimService:OnEggHatched(eggUid, run.Player.UserId)
+            local fightStarted, fightError = fightService:StartFight(eggUid, run.Player.UserId)
+            if not fightStarted then
+                warn("[EggBreakService] Could not start fight for " .. eggUid .. ": " .. tostring(fightError))
+                eggService:Transition(eggUid, "Lost")
+            end
             break
         end
     end
@@ -90,6 +96,7 @@ end
 function EggBreakService:KnitStart()
     eggService = Framework.GetService("EggService")
     claimService = Framework.GetService("ClaimService")
+    fightService = Framework.GetService("FightService")
 end
 
 function EggBreakService:StartBreak(player: Player, eggUid: string, petPower: number): (boolean, string?)

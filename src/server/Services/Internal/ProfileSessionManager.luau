@@ -6,6 +6,20 @@ export type ProfileSessionManager = {
     Load: (self: ProfileSessionManager, player: PlayerRef) -> (boolean, string?),
     Release: (self: ProfileSessionManager, player: PlayerRef) -> (boolean, string?),
     GetProfile: (self: ProfileSessionManager, userId: number) -> any?,
+    SetPetKnockedOutUntil: (
+        self: ProfileSessionManager,
+        userId: number,
+        petUid: string,
+        untilTime: number
+    ) -> (boolean, string?),
+    GetOrCreateHatchRoll: (
+        self: ProfileSessionManager,
+        userId: number,
+        eggUid: string,
+        conditionId: string,
+        seed: number
+    ) -> (any?, string?),
+    ClearHatchRoll: (self: ProfileSessionManager, userId: number, eggUid: string) -> (boolean, string?),
 }
 
 type SessionRecord = {
@@ -124,6 +138,70 @@ local function new(
             return nil
         end
         return record.Profile
+    end
+
+    function manager:SetPetKnockedOutUntil(userId: number, petUid: string, untilTime: number): (boolean, string?)
+        local record = profilesByUserId[userId]
+        if record == nil or not record.Profile:IsActive() then
+            return false, "ProfileNotLoaded"
+        end
+        if type(petUid) ~= "string" or petUid == "" then
+            return false, "InvalidPetUid"
+        end
+        if type(untilTime) ~= "number" or untilTime ~= untilTime or untilTime < 0 or untilTime == math.huge then
+            return false, "InvalidKnockoutExpiry"
+        end
+        local pet = record.Profile.Data.Pets[petUid]
+        if type(pet) ~= "table" then
+            return false, "PetNotFound"
+        end
+        pet.KnockedOutUntil = untilTime
+        return true, nil
+    end
+
+    function manager:GetOrCreateHatchRoll(
+        userId: number,
+        eggUid: string,
+        conditionId: string,
+        seed: number
+    ): (any?, string?)
+        local record = profilesByUserId[userId]
+        if record == nil or not record.Profile:IsActive() then
+            return nil, "ProfileNotLoaded"
+        end
+        if
+            type(eggUid) ~= "string"
+            or eggUid == ""
+            or type(conditionId) ~= "string"
+            or conditionId == ""
+            or type(seed) ~= "number"
+            or seed ~= seed
+            or seed < 0
+            or seed > 0xFFFFFFFF
+            or seed % 1 ~= 0
+        then
+            return nil, "InvalidHatchRoll"
+        end
+        local rolls = record.Profile.Data.PendingHatchRolls
+        local existing = rolls[eggUid]
+        if existing ~= nil then
+            return table.clone(existing), nil
+        end
+        local committed = { ConditionId = conditionId, Seed = seed }
+        rolls[eggUid] = committed
+        return table.clone(committed), nil
+    end
+
+    function manager:ClearHatchRoll(userId: number, eggUid: string): (boolean, string?)
+        local record = profilesByUserId[userId]
+        if record == nil or not record.Profile:IsActive() then
+            return false, "ProfileNotLoaded"
+        end
+        if type(eggUid) ~= "string" or eggUid == "" then
+            return false, "InvalidEggUid"
+        end
+        record.Profile.Data.PendingHatchRolls[eggUid] = nil
+        return true, nil
     end
 
     return manager :: ProfileSessionManager

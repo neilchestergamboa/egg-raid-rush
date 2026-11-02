@@ -7,7 +7,7 @@ local PetDefs = require(ConfigFolder:WaitForChild("PetDefs") :: ModuleScript)
 local ConditionDefs = require(ConfigFolder:WaitForChild("ConditionDefs") :: ModuleScript)
 local PetPower = require(RulesFolder:WaitForChild("PetPower") :: ModuleScript)
 
-local CURRENT_VERSION = 1
+local CURRENT_VERSION = 2
 local STARTER_PET_DEF_ID = "pet_jackal_pup"
 local STARTER_CONDITION_ID = "Sturdy"
 
@@ -25,6 +25,7 @@ export type ProfileData = {
     Pets: { [string]: PetData },
     ChampionPetUid: string,
     SpeedPoints: number,
+    PendingHatchRolls: { [string]: { ConditionId: string, Seed: number } },
 }
 
 local function isFinite(value: number): boolean
@@ -92,6 +93,7 @@ local function createTemplate(): ProfileData
         Pets = {},
         ChampionPetUid = "",
         SpeedPoints = 0,
+        PendingHatchRolls = {},
     }
 end
 
@@ -137,12 +139,36 @@ local function migrate(source: any, userId: number): (boolean, ProfileData | str
     if type(sourceSpeedPoints) ~= "number" or not isFinite(sourceSpeedPoints) or sourceSpeedPoints < 0 then
         return false, "SpeedPoints must be a finite non-negative number."
     end
+    local pendingHatchRolls = source.PendingHatchRolls
+    if pendingHatchRolls == nil then
+        pendingHatchRolls = {}
+    end
+    if type(pendingHatchRolls) ~= "table" then
+        return false, "PendingHatchRolls must be a table."
+    end
+    for eggUid, roll in pairs(pendingHatchRolls) do
+        if
+            type(eggUid) ~= "string"
+            or eggUid == ""
+            or type(roll) ~= "table"
+            or type(roll.ConditionId) ~= "string"
+            or type(ConditionDefs[roll.ConditionId]) ~= "table"
+            or type(roll.Seed) ~= "number"
+            or not isFinite(roll.Seed)
+            or roll.Seed < 0
+            or roll.Seed > 0xFFFFFFFF
+            or roll.Seed % 1 ~= 0
+        then
+            return false, "PendingHatchRolls contains an invalid roll."
+        end
+    end
 
     -- Version 0 represents pre-versioned prototype data. Preserve all existing fields.
     local migrated = table.clone(source)
     migrated.Version = CURRENT_VERSION
     migrated.Pets = table.clone(sourcePets)
     migrated.SpeedPoints = sourceSpeedPoints
+    migrated.PendingHatchRolls = table.clone(pendingHatchRolls)
     migrated.ChampionPetUid = sourceChampionUid or ""
 
     if next(migrated.Pets) == nil then

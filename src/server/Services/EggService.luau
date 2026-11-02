@@ -197,6 +197,49 @@ function EggService:SetBreakProgress(
     return true, nil
 end
 
+function EggService:CommitHatch(
+    eggUid: string,
+    claimantUserId: number,
+    petUid: string,
+    petPower: number,
+    conditionId: string,
+    seed: number
+): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    return runtime:CommitHatch(eggUid, claimantUserId, petUid, petPower, conditionId, seed)
+end
+
+function EggService:SetFightSnapshot(eggUid: string, snapshot: any): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    local slot = runtime:GetSlot(eggUid)
+    if slot == nil then
+        return false, "EggNotFound"
+    end
+    if slot.State ~= "Fighting" then
+        return false, "EggNotFighting"
+    end
+    local zoneFolder = Workspace:FindFirstChild(STATE_ROOT_NAME)
+    local slotFolder = if zoneFolder == nil then nil else zoneFolder:FindFirstChild("Zone" .. tostring(slot.ZoneId))
+    local eggFolder = if slotFolder == nil then nil else slotFolder:FindFirstChild(eggUid)
+    if eggFolder == nil then
+        return false, "EggStateFolderMissing"
+    end
+    eggFolder:SetAttribute("FightElapsedSeconds", snapshot.ElapsedSeconds)
+    eggFolder:SetAttribute("FightDurationSeconds", snapshot.DurationSeconds)
+    eggFolder:SetAttribute("PetHp", snapshot.PetHp)
+    eggFolder:SetAttribute("PetMaxHp", snapshot.PetMaxHp)
+    eggFolder:SetAttribute("HatchlingHp", snapshot.HatchlingHp)
+    eggFolder:SetAttribute("HatchlingMaxHp", snapshot.HatchlingMaxHp)
+    eggFolder:SetAttribute("FightSeed", snapshot.Seed)
+    eggFolder:SetAttribute("FightStatus", snapshot.Status)
+    eggFolder:SetAttribute("FightResult", snapshot.Result)
+    return true, nil
+end
+
 function EggService:ReleaseClaim(eggUid: string, reason: string): (boolean, string?)
     if runtime == nil then
         return false, "EggServiceNotReady"

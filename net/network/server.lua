@@ -134,6 +134,9 @@ if not RunService:IsRunning() then
 	local noop = function() end
 	return table.freeze({
 		SendEvents = noop,
+		RetreatEgg = table.freeze({
+			SetCallback = noop
+		}),
 		RequestEgg = table.freeze({
 			SetCallback = noop
 		}),
@@ -167,7 +170,8 @@ end
 Players.PlayerRemoving:Connect(function(player)
 	player_map[player] = nil
 end)
-export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "InvalidPet" | "RateLimited" | "ServerError")
+export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
+export type FightActionResultCode = ("Retreated" | "FightNotActive" | "RateLimited" | "ServerError")
 
 local function SendEvents()
 	for player, outgoing in player_map do
@@ -187,7 +191,7 @@ end
 
 RunService.Heartbeat:Connect(SendEvents)
 
-local reliable_events = table.create(1)
+local reliable_events = table.create(2)
 reliable.OnServerEvent:Connect(function(player, buff, inst)
 	incoming_buff = buff
 	incoming_inst = inst
@@ -196,13 +200,46 @@ reliable.OnServerEvent:Connect(function(player, buff, inst)
 	local len = buffer.len(buff)
 	while incoming_read < len do
 		local id = buffer.readu8(buff, read(1))
-		if id == 0 then -- RequestEgg
+		if id == 1 then -- RetreatEgg
 			local call_id = buffer.readu8(buff, read(1))
 			local value
 			local len_1 = buffer.readu8(incoming_buff, read(1)) + 1
 			assert(len_1 >= 1, "value is less than 1!")
 			assert(len_1 <= 256, "value is more than 256!")
 			value = buffer.readstring(incoming_buff, read(len_1), len_1)
+			assert(utf8.len(value) ~= nil, "value is not valid utf-8")
+			if reliable_events[1] then
+				task.spawn(function(player_2, call_id_2, value_1)
+					local ret_1 = reliable_events[1](player_2, value_1)
+					load_player(player_2)
+					alloc(1)
+					buffer.writeu8(outgoing_buff, outgoing_apos, 1)
+					alloc(1)
+					buffer.writeu8(outgoing_buff, outgoing_apos, call_id_2)
+					local bool_1 = 0
+					local bool_1_pos_1 = alloc(1)
+					if ret_1 == "Retreated" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000000001)
+					elseif ret_1 == "FightNotActive" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000000010)
+					elseif ret_1 == "RateLimited" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000000100)
+					elseif ret_1 == "ServerError" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000001000)
+					else
+						error("Invalid enumerator")
+					end
+					buffer.writeu8(outgoing_buff, bool_1_pos_1, bool_1)
+					player_map[player_2] = save()
+				end, player, call_id, value)
+			end
+		elseif id == 0 then -- RequestEgg
+			local call_id = buffer.readu8(buff, read(1))
+			local value
+			local len_2 = buffer.readu8(incoming_buff, read(1)) + 1
+			assert(len_2 >= 1, "value is less than 1!")
+			assert(len_2 <= 256, "value is more than 256!")
+			value = buffer.readstring(incoming_buff, read(len_2), len_2)
 			assert(utf8.len(value) ~= nil, "value is not valid utf-8")
 			if reliable_events[0] then
 				task.spawn(function(player_2, call_id_2, value_1)
@@ -212,40 +249,42 @@ reliable.OnServerEvent:Connect(function(player, buff, inst)
 					buffer.writeu8(outgoing_buff, outgoing_apos, 0)
 					alloc(1)
 					buffer.writeu8(outgoing_buff, outgoing_apos, call_id_2)
-					local bool_1 = 0
-					local bool_1_pos_1 = alloc(2)
+					local bool_2 = 0
+					local bool_2_pos_1 = alloc(2)
 					if ret_1 == "Claimed" then
-						bool_1 = bit32.bor(bool_1, 0b0000000000000001)
+						bool_2 = bit32.bor(bool_2, 0b0000000000000001)
 					elseif ret_1 == "ClaimLostRace" then
-						bool_1 = bit32.bor(bool_1, 0b0000000000000010)
+						bool_2 = bit32.bor(bool_2, 0b0000000000000010)
 					elseif ret_1 == "EggNotFound" then
-						bool_1 = bit32.bor(bool_1, 0b0000000000000100)
+						bool_2 = bit32.bor(bool_2, 0b0000000000000100)
 					elseif ret_1 == "EggUnavailable" then
-						bool_1 = bit32.bor(bool_1, 0b0000000000001000)
+						bool_2 = bit32.bor(bool_2, 0b0000000000001000)
 					elseif ret_1 == "EggObjectUnavailable" then
-						bool_1 = bit32.bor(bool_1, 0b0000000000010000)
+						bool_2 = bit32.bor(bool_2, 0b0000000000010000)
 					elseif ret_1 == "NoCharacter" then
-						bool_1 = bit32.bor(bool_1, 0b0000000000100000)
+						bool_2 = bit32.bor(bool_2, 0b0000000000100000)
 					elseif ret_1 == "TooFar" then
-						bool_1 = bit32.bor(bool_1, 0b0000000001000000)
+						bool_2 = bit32.bor(bool_2, 0b0000000001000000)
 					elseif ret_1 == "CarryingCreature" then
-						bool_1 = bit32.bor(bool_1, 0b0000000010000000)
+						bool_2 = bit32.bor(bool_2, 0b0000000010000000)
 					elseif ret_1 == "ProfileNotReady" then
-						bool_1 = bit32.bor(bool_1, 0b0000000100000000)
+						bool_2 = bit32.bor(bool_2, 0b0000000100000000)
 					elseif ret_1 == "NoPetEquipped" then
-						bool_1 = bit32.bor(bool_1, 0b0000001000000000)
+						bool_2 = bit32.bor(bool_2, 0b0000001000000000)
 					elseif ret_1 == "PetRecovering" then
-						bool_1 = bit32.bor(bool_1, 0b0000010000000000)
+						bool_2 = bit32.bor(bool_2, 0b0000010000000000)
+					elseif ret_1 == "FightInProgress" then
+						bool_2 = bit32.bor(bool_2, 0b0000100000000000)
 					elseif ret_1 == "InvalidPet" then
-						bool_1 = bit32.bor(bool_1, 0b0000100000000000)
+						bool_2 = bit32.bor(bool_2, 0b0001000000000000)
 					elseif ret_1 == "RateLimited" then
-						bool_1 = bit32.bor(bool_1, 0b0001000000000000)
+						bool_2 = bit32.bor(bool_2, 0b0010000000000000)
 					elseif ret_1 == "ServerError" then
-						bool_1 = bit32.bor(bool_1, 0b0010000000000000)
+						bool_2 = bit32.bor(bool_2, 0b0100000000000000)
 					else
 						error("Invalid enumerator")
 					end
-					buffer.writeu16(outgoing_buff, bool_1_pos_1, bool_1)
+					buffer.writeu16(outgoing_buff, bool_2_pos_1, bool_2)
 					player_map[player_2] = save()
 				end, player, call_id, value)
 			end
@@ -259,8 +298,16 @@ table.freeze(polling_queues_unreliable)
 
 local returns = {
 	SendEvents = SendEvents,
+	RetreatEgg = {
+		SetCallback = function(Callback: (Player: Player, eggUid: (string)) -> (("Retreated" | "FightNotActive" | "RateLimited" | "ServerError"))): () -> ()
+			reliable_events[1] = Callback
+			return function()
+				reliable_events[1] = nil
+			end
+		end,
+	},
 	RequestEgg = {
-		SetCallback = function(Callback: (Player: Player, eggUid: (string)) -> (("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "InvalidPet" | "RateLimited" | "ServerError"))): () -> ()
+		SetCallback = function(Callback: (Player: Player, eggUid: (string)) -> (("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError"))): () -> ()
 			reliable_events[0] = Callback
 			return function()
 				reliable_events[0] = nil

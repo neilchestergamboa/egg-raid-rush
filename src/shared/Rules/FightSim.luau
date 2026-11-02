@@ -10,6 +10,12 @@ local UINT32_RANGE = 4_294_967_296
 
 export type Winner = "Pet" | "Hatchling"
 
+export type FightSnapshot = {
+    ElapsedSeconds: number,
+    PetHp: number,
+    HatchlingHp: number,
+}
+
 export type FightResult = {
     Winner: Winner,
     DurationSeconds: number,
@@ -19,6 +25,19 @@ export type FightResult = {
     WasTieBreak: boolean,
     Seed: number,
     TieBreakSeed: number?,
+    History: { FightSnapshot },
+}
+
+export type FightSettings = {
+    TickSeconds: number,
+    DamageVariance: number,
+    HealthPerPower: number,
+}
+
+local DEFAULT_SETTINGS: FightSettings = {
+    TickSeconds = TICK_SECONDS,
+    DamageVariance = DAMAGE_VARIANCE,
+    HealthPerPower = HEALTH_PER_POWER,
 }
 
 local function makeNextRandom(seed: number): () -> number
@@ -35,30 +54,45 @@ local function makeNextRandom(seed: number): () -> number
     end
 end
 
-local function validateInputs(petPower: number, hatchlingPower: number, seed: number)
-    assert(petPower > 0, "petPower must be positive.")
-    assert(hatchlingPower > 0, "hatchlingPower must be positive.")
+local function validateInputs(petPower: number, hatchlingPower: number, seed: number, settings: FightSettings)
+    assert(petPower > 0 and petPower < math.huge, "petPower must be finite and positive.")
+    assert(hatchlingPower > 0 and hatchlingPower < math.huge, "hatchlingPower must be finite and positive.")
     assert(seed >= 0 and seed % 1 == 0 and seed <= 0xFFFFFFFF, "seed must be an unsigned 32-bit integer.")
+    assert(settings.TickSeconds > 0 and settings.TickSeconds < math.huge, "tick seconds must be finite and positive.")
+    assert(settings.DamageVariance >= 0 and settings.DamageVariance < 1, "damage variance must be in [0, 1).")
+    assert(
+        settings.HealthPerPower > 0 and settings.HealthPerPower < math.huge,
+        "health per power must be finite and positive."
+    )
 end
 
-local function simulate(petPower: number, hatchlingPower: number, seed: number): FightResult
-    validateInputs(petPower, hatchlingPower, seed)
+local function simulate(petPower: number, hatchlingPower: number, seed: number, settings: FightSettings?): FightResult
+    local resolvedSettings = settings or DEFAULT_SETTINGS
+    validateInputs(petPower, hatchlingPower, seed, resolvedSettings)
 
     local nextRandom = makeNextRandom(seed)
-    local petHp = HEALTH_PER_POWER * petPower
-    local hatchlingHp = HEALTH_PER_POWER * hatchlingPower
+    local petHp = resolvedSettings.HealthPerPower * petPower
+    local hatchlingHp = resolvedSettings.HealthPerPower * hatchlingPower
     local ticks = 0
+    local history: { FightSnapshot } = {}
 
     while petHp > 0 and hatchlingHp > 0 do
-        local petDamage = petPower * TICK_SECONDS * (1 - DAMAGE_VARIANCE + nextRandom() * DAMAGE_VARIANCE * 2)
+        local petDamage = petPower
+            * resolvedSettings.TickSeconds
+            * (1 - resolvedSettings.DamageVariance + nextRandom() * resolvedSettings.DamageVariance * 2)
         local hatchlingDamage = hatchlingPower
-            * TICK_SECONDS
-            * (1 - DAMAGE_VARIANCE + nextRandom() * DAMAGE_VARIANCE * 2)
+            * resolvedSettings.TickSeconds
+            * (1 - resolvedSettings.DamageVariance + nextRandom() * resolvedSettings.DamageVariance * 2)
 
         -- Apply both hits before checking knockouts so neither fighter gets a tick-order advantage.
         petHp = math.max(0, petHp - hatchlingDamage)
         hatchlingHp = math.max(0, hatchlingHp - petDamage)
         ticks += 1
+        table.insert(history, {
+            ElapsedSeconds = ticks * resolvedSettings.TickSeconds,
+            PetHp = petHp,
+            HatchlingHp = hatchlingHp,
+        })
     end
 
     local wasTieBreak = petHp <= 0 and hatchlingHp <= 0
@@ -76,13 +110,14 @@ local function simulate(petPower: number, hatchlingPower: number, seed: number):
 
     return {
         Winner = winner,
-        DurationSeconds = ticks * TICK_SECONDS,
+        DurationSeconds = ticks * resolvedSettings.TickSeconds,
         Ticks = ticks,
         PetRemainingHp = petHp,
         HatchlingRemainingHp = hatchlingHp,
         WasTieBreak = wasTieBreak,
         Seed = seed,
         TieBreakSeed = tieBreakSeed,
+        History = history,
     }
 end
 

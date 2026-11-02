@@ -132,6 +132,9 @@ if not RunService:IsRunning() then
 	local noop = function() end
 	return table.freeze({
 		SendEvents = noop,
+		RetreatEgg = table.freeze({
+			Call = noop
+		}),
 		RequestEgg = table.freeze({
 			Call = noop
 		}),
@@ -142,7 +145,8 @@ local remotes = ReplicatedStorage:WaitForChild("ZAP")
 local reliable = remotes:WaitForChild("ZAP_RELIABLE")
 assert(reliable:IsA("RemoteEvent"), "Expected ZAP_RELIABLE to be a RemoteEvent")
 
-export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "InvalidPet" | "RateLimited" | "ServerError")
+export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
+export type FightActionResultCode = ("Retreated" | "FightNotActive" | "RateLimited" | "ServerError")
 
 local function SendEvents()
 	if outgoing_used ~= 0 then
@@ -160,9 +164,10 @@ end
 
 RunService.Heartbeat:Connect(SendEvents)
 
-local reliable_events = table.create(1)
-local reliable_event_queue: { [number]: { any } } = table.create(1)
+local reliable_events = table.create(2)
+local reliable_event_queue: { [number]: { any } } = table.create(2)
 local function_call_id = 0
+reliable_event_queue[1] = table.create(255)
 reliable_event_queue[0] = table.create(255)
 reliable.OnClientEvent:Connect(function(buff, inst)
 	incoming_buff = buff
@@ -172,37 +177,58 @@ reliable.OnClientEvent:Connect(function(buff, inst)
 	local len = buffer.len(buff)
 	while incoming_read < len do
 		local id = buffer.readu8(buff, read(1))
-		if id == 0 then -- RequestEgg
+		if id == 1 then -- RetreatEgg
 			local call_id = buffer.readu8(incoming_buff, read(1))
 			local value
-			local bool_1 = buffer.readu16(incoming_buff, read(2))
+			local bool_1 = buffer.readu8(incoming_buff, read(1))
 			if bit32.btest(bool_1, 0b0000000000000001) then
-				value = "Claimed"
+				value = "Retreated"
 			elseif bit32.btest(bool_1, 0b0000000000000010) then
-				value = "ClaimLostRace"
+				value = "FightNotActive"
 			elseif bit32.btest(bool_1, 0b0000000000000100) then
-				value = "EggNotFound"
-			elseif bit32.btest(bool_1, 0b0000000000001000) then
-				value = "EggUnavailable"
-			elseif bit32.btest(bool_1, 0b0000000000010000) then
-				value = "EggObjectUnavailable"
-			elseif bit32.btest(bool_1, 0b0000000000100000) then
-				value = "NoCharacter"
-			elseif bit32.btest(bool_1, 0b0000000001000000) then
-				value = "TooFar"
-			elseif bit32.btest(bool_1, 0b0000000010000000) then
-				value = "CarryingCreature"
-			elseif bit32.btest(bool_1, 0b0000000100000000) then
-				value = "ProfileNotReady"
-			elseif bit32.btest(bool_1, 0b0000001000000000) then
-				value = "NoPetEquipped"
-			elseif bit32.btest(bool_1, 0b0000010000000000) then
-				value = "PetRecovering"
-			elseif bit32.btest(bool_1, 0b0000100000000000) then
-				value = "InvalidPet"
-			elseif bit32.btest(bool_1, 0b0001000000000000) then
 				value = "RateLimited"
-			elseif bit32.btest(bool_1, 0b0010000000000000) then
+			elseif bit32.btest(bool_1, 0b0000000000001000) then
+				value = "ServerError"
+			end
+			local thread = reliable_event_queue[1][call_id]
+			-- When using actors it's possible for multiple Zap clients to exist, but only one called the Zap remote function.
+			if thread then
+				task.spawn(thread, value)
+			end
+			reliable_event_queue[1][call_id] = nil
+		elseif id == 0 then -- RequestEgg
+			local call_id = buffer.readu8(incoming_buff, read(1))
+			local value
+			local bool_2 = buffer.readu16(incoming_buff, read(2))
+			if bit32.btest(bool_2, 0b0000000000000001) then
+				value = "Claimed"
+			elseif bit32.btest(bool_2, 0b0000000000000010) then
+				value = "ClaimLostRace"
+			elseif bit32.btest(bool_2, 0b0000000000000100) then
+				value = "EggNotFound"
+			elseif bit32.btest(bool_2, 0b0000000000001000) then
+				value = "EggUnavailable"
+			elseif bit32.btest(bool_2, 0b0000000000010000) then
+				value = "EggObjectUnavailable"
+			elseif bit32.btest(bool_2, 0b0000000000100000) then
+				value = "NoCharacter"
+			elseif bit32.btest(bool_2, 0b0000000001000000) then
+				value = "TooFar"
+			elseif bit32.btest(bool_2, 0b0000000010000000) then
+				value = "CarryingCreature"
+			elseif bit32.btest(bool_2, 0b0000000100000000) then
+				value = "ProfileNotReady"
+			elseif bit32.btest(bool_2, 0b0000001000000000) then
+				value = "NoPetEquipped"
+			elseif bit32.btest(bool_2, 0b0000010000000000) then
+				value = "PetRecovering"
+			elseif bit32.btest(bool_2, 0b0000100000000000) then
+				value = "FightInProgress"
+			elseif bit32.btest(bool_2, 0b0001000000000000) then
+				value = "InvalidPet"
+			elseif bit32.btest(bool_2, 0b0010000000000000) then
+				value = "RateLimited"
+			elseif bit32.btest(bool_2, 0b0100000000000000) then
 				value = "ServerError"
 			end
 			local thread = reliable_event_queue[0][call_id]
@@ -221,16 +247,16 @@ table.freeze(polling_queues_unreliable)
 
 local returns = {
 	SendEvents = SendEvents,
-	RequestEgg = {
-		Call = function(eggUid: (string)): (("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "InvalidPet" | "RateLimited" | "ServerError"))
+	RetreatEgg = {
+		Call = function(eggUid: (string)): (("Retreated" | "FightNotActive" | "RateLimited" | "ServerError"))
 			function_call_id += 1
 			function_call_id %= 256
-			if reliable_event_queue[0][function_call_id] then
+			if reliable_event_queue[1][function_call_id] then
 				function_call_id -= 1
 				error("Zap has more than 256 calls awaiting a response, and therefore this packet has been dropped")
 			end
 			alloc(1)
-			buffer.writeu8(outgoing_buff, outgoing_apos, 0)
+			buffer.writeu8(outgoing_buff, outgoing_apos, 1)
 			alloc(1)
 			buffer.writeu8(outgoing_buff, outgoing_apos, function_call_id)
 			local len_1 = #eggUid
@@ -241,6 +267,30 @@ local returns = {
 			buffer.writeu8(outgoing_buff, outgoing_apos, len_1 - 1)
 			alloc(len_1)
 			buffer.writestring(outgoing_buff, outgoing_apos, eggUid, len_1)
+			reliable_event_queue[1][function_call_id] = coroutine.running()
+			return coroutine.yield()
+		end,
+	},
+	RequestEgg = {
+		Call = function(eggUid: (string)): (("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError"))
+			function_call_id += 1
+			function_call_id %= 256
+			if reliable_event_queue[0][function_call_id] then
+				function_call_id -= 1
+				error("Zap has more than 256 calls awaiting a response, and therefore this packet has been dropped")
+			end
+			alloc(1)
+			buffer.writeu8(outgoing_buff, outgoing_apos, 0)
+			alloc(1)
+			buffer.writeu8(outgoing_buff, outgoing_apos, function_call_id)
+			local len_2 = #eggUid
+			assert(len_2 >= 1, "value is less than 1!")
+			assert(len_2 <= 256, "value is more than 256!")
+			assert(utf8.len(eggUid) ~= nil, "value is not valid utf-8")
+			alloc(1)
+			buffer.writeu8(outgoing_buff, outgoing_apos, len_2 - 1)
+			alloc(len_2)
+			buffer.writestring(outgoing_buff, outgoing_apos, eggUid, len_2)
 			reliable_event_queue[0][function_call_id] = coroutine.running()
 			return coroutine.yield()
 		end,

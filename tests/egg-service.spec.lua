@@ -252,4 +252,27 @@ JestGlobals.describe("EggSlotRuntime", function()
         callbacks[1].Callback()
         JestGlobals.expect(runtime:GetSlot(eggUid).State).toBe("Sealed")
     end)
+
+    JestGlobals.it(
+        "keeps one player's committed condition through release and prevents another player's reroll",
+        function()
+            local runtime = makeRuntime()
+            local eggUid = ZoneDefs.Zone1.EggDefIds[1]
+            runtime:TryClaim(eggUid, 101)
+            local committed = runtime:CommitHatch(eggUid, 101, "starter-101", 120, "Sturdy", 321)
+            JestGlobals.expect(committed).toBe(true)
+            runtime:ReleaseClaim(eggUid, "PlayerLeft")
+            runtime:TryClaim(eggUid, 101)
+            runtime:CommitHatch(eggUid, 101, "starter-101", 120, "Flawless", 999)
+            local resumed = runtime:GetSlot(eggUid)
+            JestGlobals.expect(resumed.ConditionRoll).toBe("Sturdy")
+            JestGlobals.expect(resumed.ConditionSeed).toBe(321)
+            runtime:ReleaseClaim(eggUid, "Timeout")
+            runtime:TryClaim(eggUid, 202)
+            runtime:CommitHatch(eggUid, 202, "starter-202", 120, "Cracked", 654)
+            local newOwner = runtime:GetSlot(eggUid)
+            JestGlobals.expect(newOwner.ConditionRoll).toBe("Cracked")
+            JestGlobals.expect(newOwner.ConditionRollOwnerUserId).toBe(202)
+        end
+    )
 end)

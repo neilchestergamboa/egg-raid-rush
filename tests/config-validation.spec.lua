@@ -17,6 +17,7 @@ local function copyConfig()
         RarityDefs = table.clone(require(ConfigFolder:WaitForChild("RarityDefs"))),
         ConditionDefs = table.clone(require(ConfigFolder:WaitForChild("ConditionDefs"))),
         EggInteractionDefs = table.clone(require(ConfigFolder:WaitForChild("EggInteractionDefs"))),
+        FightDefs = table.clone(require(ConfigFolder:WaitForChild("FightDefs"))),
     }
     config.ZoneDefs.Zone1 = table.clone(config.ZoneDefs.Zone1)
     config.ZoneDefs.Zone1.EggDefIds = table.clone(config.ZoneDefs.Zone1.EggDefIds)
