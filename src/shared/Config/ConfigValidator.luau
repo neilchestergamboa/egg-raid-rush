@@ -7,6 +7,7 @@ local Config = {
     GuardDefs = require(script.Parent:WaitForChild("GuardDefs")),
     RarityDefs = require(script.Parent:WaitForChild("RarityDefs")),
     ConditionDefs = require(script.Parent:WaitForChild("ConditionDefs")),
+    EggInteractionDefs = require(script.Parent:WaitForChild("EggInteractionDefs")),
 }
 
 type ConfigData = {
@@ -16,6 +17,7 @@ type ConfigData = {
     GuardDefs: any,
     RarityDefs: any,
     ConditionDefs: any,
+    EggInteractionDefs: any,
 }
 
 local function validate(config: any): (boolean, string?)
@@ -26,9 +28,54 @@ local function validate(config: any): (boolean, string?)
     if type(config) ~= "table" then
         return fail("The root definition must be a table.")
     end
-    for _, fieldName in ipairs({ "ZoneDefs", "EggDefs", "PetDefs", "GuardDefs", "RarityDefs", "ConditionDefs" }) do
+    for _, fieldName in ipairs({
+        "ZoneDefs",
+        "EggDefs",
+        "PetDefs",
+        "GuardDefs",
+        "RarityDefs",
+        "ConditionDefs",
+        "EggInteractionDefs",
+    }) do
         if type(config[fieldName]) ~= "table" then
             return fail(fieldName .. " must be a table.")
+        end
+    end
+
+    local interaction = config.EggInteractionDefs
+    for _, fieldName in ipairs({
+        "ClaimDistanceStuds",
+        "ClaimTimeoutSeconds",
+        "RequestRateLimitSeconds",
+        "DamageUpdateIntervalSeconds",
+    }) do
+        if
+            type(interaction[fieldName]) ~= "number"
+            or interaction[fieldName] ~= interaction[fieldName]
+            or interaction[fieldName] <= 0
+            or interaction[fieldName] == math.huge
+        then
+            return fail("EggInteractionDefs." .. fieldName .. " must be positive.")
+        end
+    end
+    if type(interaction.CrackHealthThresholds) ~= "table" or #interaction.CrackHealthThresholds ~= 4 then
+        return fail("EggInteractionDefs.CrackHealthThresholds must contain four thresholds.")
+    end
+    if interaction.CrackHealthThresholds[1] ~= 1 then
+        return fail("EggInteractionDefs.CrackHealthThresholds must begin at 1.")
+    end
+    for index, threshold in ipairs(interaction.CrackHealthThresholds) do
+        if
+            type(threshold) ~= "number"
+            or threshold ~= threshold
+            or threshold <= 0
+            or threshold > 1
+            or threshold == math.huge
+        then
+            return fail("EggInteractionDefs.CrackHealthThresholds entries must be in (0, 1].")
+        end
+        if index > 1 and threshold >= interaction.CrackHealthThresholds[index - 1] then
+            return fail("EggInteractionDefs.CrackHealthThresholds must be strictly descending.")
         end
     end
 

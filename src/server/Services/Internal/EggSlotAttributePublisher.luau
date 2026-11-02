@@ -11,6 +11,12 @@ local function publish(target: Instance, record: any)
     target:SetAttribute("State", record.State)
     target:SetAttribute("ClaimantUserId", record.ClaimantUserId)
     target:SetAttribute("ExpiresAt", record.ExpiresAt)
+
+    if record.State ~= "Breaking" then
+        target:SetAttribute("Health", nil)
+        target:SetAttribute("MaxHealth", nil)
+        target:SetAttribute("CrackStage", nil)
+    end
 end
 
 return { Publish = publish }

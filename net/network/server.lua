@@ -22,4 +22,251 @@ end
 
 _G.__ZAP["ZAP"]["ZAP"] = "0.6.29"
 
-return {}
+local outgoing_buff: buffer
+local outgoing_used: number
+local outgoing_size: number
+local outgoing_inst: { Instance }
+local outgoing_apos: number
+local outgoing_ids: { number }
+
+local incoming_buff: buffer
+local incoming_read: number
+local incoming_inst: { Instance }
+local incoming_ipos: number
+local incoming_ids: { number }
+
+-- thanks to https://dom.rojo.space/binary.html#cframe
+local CFrameSpecialCases = {
+	CFrame.Angles(0, 0, 0),
+	CFrame.Angles(math.rad(90), 0, 0),
+	CFrame.Angles(0, math.rad(180), math.rad(180)),
+	CFrame.Angles(math.rad(-90), 0, 0),
+	CFrame.Angles(0, math.rad(180), math.rad(90)),
+	CFrame.Angles(0, math.rad(90), math.rad(90)),
+	CFrame.Angles(0, 0, math.rad(90)),
+	CFrame.Angles(0, math.rad(-90), math.rad(90)),
+	CFrame.Angles(math.rad(-90), math.rad(-90), 0),
+	CFrame.Angles(0, math.rad(-90), 0),
+	CFrame.Angles(math.rad(90), math.rad(-90), 0),
+	CFrame.Angles(0, math.rad(90), math.rad(180)),
+	CFrame.Angles(0, math.rad(-90), math.rad(180)),
+	CFrame.Angles(0, math.rad(180), math.rad(0)),
+	CFrame.Angles(math.rad(-90), math.rad(-180), math.rad(0)),
+	CFrame.Angles(0, math.rad(0), math.rad(180)),
+	CFrame.Angles(math.rad(90), math.rad(180), math.rad(0)),
+	CFrame.Angles(0, math.rad(0), math.rad(-90)),
+	CFrame.Angles(0, math.rad(-90), math.rad(-90)),
+	CFrame.Angles(0, math.rad(-180), math.rad(-90)),
+	CFrame.Angles(0, math.rad(90), math.rad(-90)),
+	CFrame.Angles(math.rad(90), math.rad(90), 0),
+	CFrame.Angles(0, math.rad(90), 0),
+	CFrame.Angles(math.rad(-90), math.rad(90), 0),
+}
+
+local function alloc(len: number)
+	if outgoing_used + len > outgoing_size then
+		while outgoing_used + len > outgoing_size do
+			outgoing_size = outgoing_size * 2
+		end
+
+		local new_buff = buffer.create(outgoing_size)
+		buffer.copy(new_buff, 0, outgoing_buff, 0, outgoing_used)
+
+		outgoing_buff = new_buff
+	end
+
+	outgoing_apos = outgoing_used
+	outgoing_used = outgoing_used + len
+
+	return outgoing_apos
+end
+
+local function read(len: number)
+	local pos = incoming_read
+	incoming_read = incoming_read + len
+
+	return pos
+end
+
+local function save()
+	return {
+		buff = outgoing_buff,
+		used = outgoing_used,
+		size = outgoing_size,
+		inst = outgoing_inst,
+		outgoing_ids = outgoing_ids,
+		incoming_ids = incoming_ids,
+	}
+end
+
+local function load(data: {
+	buff: buffer,
+	used: number,
+	size: number,
+	inst: { Instance },
+	outgoing_ids: { number },
+	incoming_ids: { number },
+})
+	outgoing_buff = data.buff
+	outgoing_used = data.used
+	outgoing_size = data.size
+	outgoing_inst = data.inst
+	outgoing_ids = data.outgoing_ids
+	incoming_ids = data.incoming_ids
+end
+
+local function load_empty()
+	outgoing_buff = buffer.create(64)
+	outgoing_used = 0
+	outgoing_size = 64
+	outgoing_inst = {}
+	outgoing_ids = {}
+	incoming_ids = {}
+end
+
+load_empty()
+
+local types = {}
+
+local polling_queues_reliable = {}
+local polling_queues_unreliable = {}
+if not RunService:IsRunning() then
+	local noop = function() end
+	return table.freeze({
+		SendEvents = noop,
+		RequestEgg = table.freeze({
+			SetCallback = noop
+		}),
+	}) :: Events
+end
+
+local remotes = ReplicatedStorage:FindFirstChild("ZAP")
+if remotes == nil then
+	remotes = Instance.new("Folder")
+	remotes.Name = "ZAP"
+	remotes.Parent = ReplicatedStorage
+end
+
+local reliable = remotes:FindFirstChild("ZAP_RELIABLE")
+if reliable == nil then
+	reliable = Instance.new("RemoteEvent")
+	reliable.Name = "ZAP_RELIABLE"
+	reliable.Parent = remotes
+end
+
+local player_map = {}
+
+local function load_player(player: Player)
+	if player_map[player] then
+		load(player_map[player])
+	else
+		load_empty()
+	end
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	player_map[player] = nil
+end)
+export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "InvalidPet" | "RateLimited" | "ServerError")
+
+local function SendEvents()
+	for player, outgoing in player_map do
+		if outgoing.used > 0 then
+			local buff = buffer.create(outgoing.used)
+			buffer.copy(buff, 0, outgoing.buff, 0, outgoing.used)
+
+			reliable:FireClient(player, buff, outgoing.inst)
+
+			outgoing.buff = buffer.create(64)
+			outgoing.used = 0
+			outgoing.size = 64
+			table.clear(outgoing.inst)
+		end
+	end
+end
+
+RunService.Heartbeat:Connect(SendEvents)
+
+local reliable_events = table.create(1)
+reliable.OnServerEvent:Connect(function(player, buff, inst)
+	incoming_buff = buff
+	incoming_inst = inst
+	incoming_read = 0
+	incoming_ipos = 0
+	local len = buffer.len(buff)
+	while incoming_read < len do
+		local id = buffer.readu8(buff, read(1))
+		if id == 0 then -- RequestEgg
+			local call_id = buffer.readu8(buff, read(1))
+			local value
+			local len_1 = buffer.readu8(incoming_buff, read(1)) + 1
+			assert(len_1 >= 1, "value is less than 1!")
+			assert(len_1 <= 256, "value is more than 256!")
+			value = buffer.readstring(incoming_buff, read(len_1), len_1)
+			assert(utf8.len(value) ~= nil, "value is not valid utf-8")
+			if reliable_events[0] then
+				task.spawn(function(player_2, call_id_2, value_1)
+					local ret_1 = reliable_events[0](player_2, value_1)
+					load_player(player_2)
+					alloc(1)
+					buffer.writeu8(outgoing_buff, outgoing_apos, 0)
+					alloc(1)
+					buffer.writeu8(outgoing_buff, outgoing_apos, call_id_2)
+					local bool_1 = 0
+					local bool_1_pos_1 = alloc(2)
+					if ret_1 == "Claimed" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000000001)
+					elseif ret_1 == "ClaimLostRace" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000000010)
+					elseif ret_1 == "EggNotFound" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000000100)
+					elseif ret_1 == "EggUnavailable" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000001000)
+					elseif ret_1 == "EggObjectUnavailable" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000010000)
+					elseif ret_1 == "NoCharacter" then
+						bool_1 = bit32.bor(bool_1, 0b0000000000100000)
+					elseif ret_1 == "TooFar" then
+						bool_1 = bit32.bor(bool_1, 0b0000000001000000)
+					elseif ret_1 == "CarryingCreature" then
+						bool_1 = bit32.bor(bool_1, 0b0000000010000000)
+					elseif ret_1 == "ProfileNotReady" then
+						bool_1 = bit32.bor(bool_1, 0b0000000100000000)
+					elseif ret_1 == "NoPetEquipped" then
+						bool_1 = bit32.bor(bool_1, 0b0000001000000000)
+					elseif ret_1 == "PetRecovering" then
+						bool_1 = bit32.bor(bool_1, 0b0000010000000000)
+					elseif ret_1 == "InvalidPet" then
+						bool_1 = bit32.bor(bool_1, 0b0000100000000000)
+					elseif ret_1 == "RateLimited" then
+						bool_1 = bit32.bor(bool_1, 0b0001000000000000)
+					elseif ret_1 == "ServerError" then
+						bool_1 = bit32.bor(bool_1, 0b0010000000000000)
+					else
+						error("Invalid enumerator")
+					end
+					buffer.writeu16(outgoing_buff, bool_1_pos_1, bool_1)
+					player_map[player_2] = save()
+				end, player, call_id, value)
+			end
+		else
+			error("Unknown event id")
+		end
+	end
+end)
+table.freeze(polling_queues_reliable)
+table.freeze(polling_queues_unreliable)
+
+local returns = {
+	SendEvents = SendEvents,
+	RequestEgg = {
+		SetCallback = function(Callback: (Player: Player, eggUid: (string)) -> (("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "InvalidPet" | "RateLimited" | "ServerError"))): () -> ()
+			reliable_events[0] = Callback
+			return function()
+				reliable_events[0] = nil
+			end
+		end,
+	},
+}
+type Events = typeof(returns)
+return returns

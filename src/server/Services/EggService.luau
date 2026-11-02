@@ -9,6 +9,7 @@ local ConfigFolder = Shared:WaitForChild("Config")
 local ZoneDefs = require(ConfigFolder:WaitForChild("ZoneDefs") :: ModuleScript)
 local EggDefs = require(ConfigFolder:WaitForChild("EggDefs") :: ModuleScript)
 local RarityDefs = require(ConfigFolder:WaitForChild("RarityDefs") :: ModuleScript)
+local EggInteractionDefs = require(ConfigFolder:WaitForChild("EggInteractionDefs") :: ModuleScript)
 local EggSlotRuntime = require(script.Parent:WaitForChild("Internal"):WaitForChild("EggSlotRuntime") :: ModuleScript)
 local EggSlotAttributePublisher =
     require(script.Parent:WaitForChild("Internal"):WaitForChild("EggSlotAttributePublisher") :: ModuleScript)
@@ -135,6 +136,65 @@ function EggService:SetExpiresAt(eggUid: string, expiresAt: number): (boolean, s
         return false, "EggServiceNotReady"
     end
     return runtime:SetExpiresAt(eggUid, expiresAt)
+end
+
+function EggService:ClearExpiresAt(eggUid: string): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    return runtime:ClearExpiresAt(eggUid)
+end
+
+function EggService:SetBreakProgress(
+    eggUid: string,
+    health: number,
+    maxHealth: number,
+    crackStage: number
+): (boolean, string?)
+    if runtime == nil then
+        return false, "EggServiceNotReady"
+    end
+    local slot = runtime:GetSlot(eggUid)
+    if slot == nil then
+        return false, "EggNotFound"
+    end
+    if slot.State ~= "Breaking" then
+        return false, "EggNotBreaking"
+    end
+    if
+        health ~= health
+        or maxHealth ~= maxHealth
+        or health == math.huge
+        or health == -math.huge
+        or maxHealth == math.huge
+        or maxHealth == -math.huge
+        or health < 0
+        or maxHealth <= 0
+        or health > maxHealth
+        or crackStage < 1
+        or crackStage > #EggInteractionDefs.CrackHealthThresholds
+        or crackStage % 1 ~= 0
+    then
+        return false, "InvalidBreakProgress"
+    end
+
+    local zoneFolder = Workspace:FindFirstChild(STATE_ROOT_NAME)
+    if zoneFolder == nil then
+        return false, "EggStateFolderMissing"
+    end
+    local slotFolder = zoneFolder:FindFirstChild("Zone" .. tostring(slot.ZoneId))
+    if slotFolder == nil then
+        return false, "EggZoneFolderMissing"
+    end
+    local eggFolder = slotFolder:FindFirstChild(eggUid)
+    if eggFolder == nil then
+        return false, "EggStateFolderMissing"
+    end
+
+    eggFolder:SetAttribute("Health", health)
+    eggFolder:SetAttribute("MaxHealth", maxHealth)
+    eggFolder:SetAttribute("CrackStage", crackStage)
+    return true, nil
 end
 
 function EggService:ReleaseClaim(eggUid: string, reason: string): (boolean, string?)

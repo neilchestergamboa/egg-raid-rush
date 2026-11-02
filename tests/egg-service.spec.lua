@@ -143,6 +143,25 @@ JestGlobals.describe("EggSlotRuntime", function()
         JestGlobals.expect(sealedError).toBe("EggNotClaimed")
     end)
 
+    JestGlobals.it("clears the claim expiry idempotently when a break reaches the fight", function()
+        local runtime, _, published = makeRuntime()
+        local eggUid = ZoneDefs.Zone1.EggDefIds[1]
+        runtime:TryClaim(eggUid, 101)
+        runtime:SetExpiresAt(eggUid, 150)
+        runtime:Transition(eggUid, "Breaking")
+        runtime:Transition(eggUid, "Fighting")
+
+        local cleared, clearError = runtime:ClearExpiresAt(eggUid)
+        local duplicateClear = runtime:ClearExpiresAt(eggUid)
+        local slot = runtime:GetSlot(eggUid)
+        assert(slot ~= nil, "Egg slot should remain available while fighting")
+        JestGlobals.expect(cleared).toBe(true)
+        JestGlobals.expect(clearError).toBe(nil)
+        JestGlobals.expect(duplicateClear).toBe(true)
+        JestGlobals.expect(slot.ExpiresAt).toBe(nil)
+        JestGlobals.expect(#published).toBe(11)
+    end)
+
     JestGlobals.it("releases claimed and breaking eggs to sealed and tolerates duplicate releases", function()
         local runtime, _, _, logs = makeRuntime()
         local claimedUid = ZoneDefs.Zone1.EggDefIds[1]
