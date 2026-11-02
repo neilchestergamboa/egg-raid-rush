@@ -148,9 +148,9 @@ local remotes = ReplicatedStorage:WaitForChild("ZAP")
 local reliable = remotes:WaitForChild("ZAP_RELIABLE")
 assert(reliable:IsA("RemoteEvent"), "Expected ZAP_RELIABLE to be a RemoteEvent")
 
+export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
 export type FightActionResultCode = ("Retreated" | "FightNotActive" | "RateLimited" | "ServerError")
 export type CarryActionResultCode = ("PickedUp" | "CreatureNotFound" | "CreatureUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "PickupLockedOut" | "DropExpired" | "RateLimited" | "ServerError")
-export type EggActionResultCode = ("Claimed" | "ClaimLostRace" | "EggNotFound" | "EggUnavailable" | "EggObjectUnavailable" | "NoCharacter" | "TooFar" | "CarryingCreature" | "ProfileNotReady" | "NoPetEquipped" | "PetRecovering" | "FightInProgress" | "InvalidPet" | "RateLimited" | "ServerError")
 
 local function SendEvents()
 	if outgoing_used ~= 0 then
