@@ -10,9 +10,11 @@ local Config = Shared:WaitForChild("Config")
 local EggDefs = require(Config:WaitForChild("EggDefs") :: ModuleScript)
 local ConditionDefs = require(Config:WaitForChild("ConditionDefs") :: ModuleScript)
 local FightDefs = require(Config:WaitForChild("FightDefs") :: ModuleScript)
+local TutorialDefs = require(Config:WaitForChild("TutorialDefs") :: ModuleScript)
 local Rules = Shared:WaitForChild("Rules")
 local ConditionRoll = require(Rules:WaitForChild("ConditionRoll") :: ModuleScript)
 local FightSim = require(Rules:WaitForChild("FightSim") :: ModuleScript)
+local TutorialRules = require(Rules:WaitForChild("TutorialRules") :: ModuleScript)
 local Internal = script.Parent:WaitForChild("Internal")
 local PlayerRateLimiter = require(Internal:WaitForChild("PlayerRateLimiter") :: ModuleScript)
 local FightRuntime = require(Internal:WaitForChild("FightRuntime") :: ModuleScript)
@@ -264,7 +266,20 @@ function FightService:StartFight(eggUid: string, userId: number): (boolean, stri
     if type(condition) ~= "table" then
         return false, "ConditionConfigMissing"
     end
-    local hatchlingPower = egg.HatchlingPower * condition.PowerMultiplier
+    local player = Players:GetPlayerByUserId(userId)
+    if player == nil then
+        return false, "PlayerNotConnected"
+    end
+    local rolledHatchlingPower = egg.HatchlingPower * condition.PowerMultiplier
+    local profile = dataService:GetProfileData(player)
+    local hatchlingPower = TutorialRules.GetFightHatchlingPower(
+        petPower,
+        rolledHatchlingPower,
+        profile == nil or profile.TutorialCompleted == true,
+        egg.ZoneId,
+        egg.RarityId,
+        TutorialDefs.FirstRaid
+    )
     local seed = newSeed()
     local simulation = FightSim.Simulate(petPower, hatchlingPower, seed, {
         TickSeconds = FightDefs.TickSeconds,
@@ -273,10 +288,6 @@ function FightService:StartFight(eggUid: string, userId: number): (boolean, stri
     })
     local startedAt = Workspace:GetServerTimeNow()
     if simulation.Winner == "Hatchling" then
-        local player = Players:GetPlayerByUserId(userId)
-        if player == nil then
-            return false, "PlayerNotConnected"
-        end
         local knockedOutUntil = startedAt + simulation.DurationSeconds + FightDefs.KnockoutRecoverySeconds
         local saved, saveError = dataService:SetPetKnockedOutUntil(player, petUid, knockedOutUntil)
         if not saved then
@@ -297,10 +308,7 @@ function FightService:StartFight(eggUid: string, userId: number): (boolean, stri
     local started, startError = fightRuntime:Start(eggUid, fight)
     if not started then
         if fight.ProvisionalKnockout then
-            local player = Players:GetPlayerByUserId(userId)
-            if player ~= nil then
-                dataService:SetPetKnockedOutUntil(player, petUid, 0)
-            end
+            dataService:SetPetKnockedOutUntil(player, petUid, 0)
         end
         return false, startError
     end
