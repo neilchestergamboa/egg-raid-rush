@@ -2,6 +2,7 @@
 
 local HudTheme = {
     ScreenDisplayOrder = 20,
+    ChaseDisplayOrder = 21,
     ActionButtonSize = 84,
     BarHeight = 14,
     BillboardMaxDistance = 48,
@@ -21,6 +22,9 @@ local HudTheme = {
     CrackOnColor = Color3.fromRGB(255, 228, 170),
     CrackOffColor = Color3.fromRGB(70, 58, 48),
     StrokeColor = Color3.fromRGB(20, 14, 10),
+    GuardWarningColor = Color3.fromRGB(255, 196, 74),
+    GuardCloseColor = Color3.fromRGB(255, 168, 96),
+    BankFlashColor = Color3.fromRGB(255, 236, 170),
 }
 
 return HudTheme

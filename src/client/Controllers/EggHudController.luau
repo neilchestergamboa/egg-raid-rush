@@ -13,6 +13,8 @@ local EggDefs = require(ConfigFolder:WaitForChild("EggDefs") :: ModuleScript)
 local PetDefs = require(ConfigFolder:WaitForChild("PetDefs") :: ModuleScript)
 local ConditionDefs = require(ConfigFolder:WaitForChild("ConditionDefs") :: ModuleScript)
 local EggInteractionDefs = require(ConfigFolder:WaitForChild("EggInteractionDefs") :: ModuleScript)
+local CarryDefs = require(ConfigFolder:WaitForChild("CarryDefs") :: ModuleScript)
+local CarryRules = require(Shared:WaitForChild("Rules"):WaitForChild("CarryRules") :: ModuleScript)
 
 local Network = require(ReplicatedStorage:WaitForChild("Network"):WaitForChild("client") :: ModuleScript)
 
@@ -225,6 +227,17 @@ local function isTyping(): boolean
     return UserInputService:GetFocusedTextBox() ~= nil
 end
 
+local function isNearDroppedCreature(root: BasePart): boolean
+    for _, child in Workspace:GetChildren() do
+        if child.Name == "DroppedCreaturePlaceholder" and child:IsA("BasePart") then
+            if CarryRules.IsWithinDistance(root.Position, child.Position, CarryDefs.PickupDistanceStuds) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function showStatus(hud: EggScreenHud.EggScreenHud, code: string)
     local message = RESULT_STATUS[code]
     if message == nil then
@@ -404,9 +417,13 @@ function EggHudController:KnitStart()
         local showAction = false
         local actionText = "Break"
 
+        local pickupBlocksClaim = rootPart ~= nil and isNearDroppedCreature(rootPart)
+
         if localFight ~= nil then
             nearestFightUid = localFight.Uid
             promptText = if showKey then "Fighting  ·  Retreat" else "Fighting"
+        elseif pickupBlocksClaim then
+            promptText = nil
         elseif not carrying and closestSealed ~= nil then
             nearestActionUid = closestSealed.Uid
             promptText = if showKey then "E  Break egg" else "Break egg"
@@ -461,13 +478,6 @@ function EggHudController:KnitStart()
     RunService.Heartbeat:Connect(refresh)
 end
 
-local registered = pcall(function()
-    Framework.CreateController(EggHudController)
-end)
-if not registered then
-    task.defer(function()
-        EggHudController:KnitStart()
-    end)
-end
+Framework.CreateController(EggHudController)
 
 return EggHudController
