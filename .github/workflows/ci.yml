@@ -27,6 +27,7 @@ jobs:
       - name: Check Zap generation
         run: |
           zap net/net.zap
+          python3 scripts/normalize-zap-types.py net/network/client.lua net/network/server.lua
           git diff --exit-code -- net/network
 
       - name: Build Roblox place
