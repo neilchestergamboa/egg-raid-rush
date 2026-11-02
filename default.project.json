@@ -5,7 +5,8 @@
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "Shared": { "$path": "src/shared" },
-      "Packages": { "$path": "Packages" }
+      "Packages": { "$path": "Packages" },
+      "Network": { "$path": "net/network" }
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",

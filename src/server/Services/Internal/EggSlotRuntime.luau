@@ -32,6 +32,7 @@ export type EggSlotRecord = EggSlotDefinition & {
 export type EggSlotRuntime = {
     TryClaim: (self: EggSlotRuntime, uid: string, claimantUserId: number) -> (boolean, string?),
     SetExpiresAt: (self: EggSlotRuntime, uid: string, expiresAt: number) -> (boolean, string?),
+    ClearExpiresAt: (self: EggSlotRuntime, uid: string) -> (boolean, string?),
     ReleaseClaim: (self: EggSlotRuntime, uid: string, reason: string) -> (boolean, string?),
     Transition: (self: EggSlotRuntime, uid: string, targetState: EggState) -> (boolean, string?),
     GetSlot: (self: EggSlotRuntime, uid: string) -> EggSlotRecord?,
@@ -156,6 +157,20 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
 
         record.ExpiresAt = expiresAt
         options.OnChanged(cloneRecord(record), record.State, "ExpiresAtUpdated")
+        return true, nil
+    end
+
+    function runtime:ClearExpiresAt(uid: string): (boolean, string?)
+        local record = getRecord(uid)
+        if record == nil then
+            return false, "EggNotFound"
+        end
+        if record.ExpiresAt == nil then
+            return true, nil
+        end
+
+        record.ExpiresAt = nil
+        options.OnChanged(cloneRecord(record), record.State, "ExpiresAtCleared")
         return true, nil
     end
 

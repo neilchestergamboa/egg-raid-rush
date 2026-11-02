@@ -12,6 +12,7 @@
       "$className": "ReplicatedStorage",
       "Shared": { "$path": "src/shared" },
       "Packages": { "$path": "Packages" },
+      "Network": { "$path": "net/network" },
       "Tests": { "$path": "tests" },
       "DevPackages": { "$path": "DevPackages" }
     }

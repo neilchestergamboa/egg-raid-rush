@@ -16,9 +16,12 @@ local function copyConfig()
         GuardDefs = table.clone(require(ConfigFolder:WaitForChild("GuardDefs"))),
         RarityDefs = table.clone(require(ConfigFolder:WaitForChild("RarityDefs"))),
         ConditionDefs = table.clone(require(ConfigFolder:WaitForChild("ConditionDefs"))),
+        EggInteractionDefs = table.clone(require(ConfigFolder:WaitForChild("EggInteractionDefs"))),
     }
     config.ZoneDefs.Zone1 = table.clone(config.ZoneDefs.Zone1)
     config.ZoneDefs.Zone1.EggDefIds = table.clone(config.ZoneDefs.Zone1.EggDefIds)
+    config.EggInteractionDefs = table.clone(config.EggInteractionDefs)
+    config.EggInteractionDefs.CrackHealthThresholds = table.clone(config.EggInteractionDefs.CrackHealthThresholds)
     return config
 end
 
@@ -73,5 +76,15 @@ JestGlobals.describe("Zone 1 shared config validation", function()
         JestGlobals.expect(message).toBe(
             "Shared config validation failed: The tutorial guard must be slower than the Zone 1 guard and forgive the first drop."
         )
+    end)
+
+    JestGlobals.it("rejects a non-positive egg interaction range", function()
+        local config = copyConfig()
+        config.EggInteractionDefs.ClaimDistanceStuds = 0
+
+        local isValid, message = Validator.Validate(config)
+        JestGlobals.expect(isValid).toBe(false)
+        JestGlobals.expect(message)
+            .toBe("Shared config validation failed: EggInteractionDefs.ClaimDistanceStuds must be positive.")
     end)
 end)
