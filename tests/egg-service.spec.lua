@@ -92,6 +92,33 @@ JestGlobals.describe("EggSlotRuntime", function()
         attributes:Destroy()
     end)
 
+    JestGlobals.it("registers a private tutorial slot once and publishes its owner", function()
+        local runtime, _, published = makeRuntime()
+        local definition = {
+            Uid = "egg_z1_tutorial_101",
+            DefId = "egg_z1_tutorial",
+            ZoneId = 1,
+            RarityId = "Common",
+            RespawnSeconds = 25,
+            IsTutorial = true,
+            OwnerUserId = 101,
+        }
+        local registered, registerError = runtime:RegisterDefinition(definition)
+        local duplicate, duplicateError = runtime:RegisterDefinition(definition)
+        JestGlobals.expect(registered).toBe(true)
+        JestGlobals.expect(registerError).toBe(nil)
+        JestGlobals.expect(duplicate).toBe(false)
+        JestGlobals.expect(duplicateError).toBe("EggSlotAlreadyRegistered")
+        local slot = runtime:GetSlot(definition.Uid)
+        assert(slot ~= nil, "Registered tutorial slot should exist")
+        JestGlobals.expect(slot.OwnerUserId).toBe(101)
+        JestGlobals.expect(published[#published].OwnerUserId).toBe(101)
+        local attributes = Instance.new("Folder")
+        EggSlotAttributePublisher.Publish(attributes, slot)
+        JestGlobals.expect(attributes:GetAttribute("OwnerUserId")).toBe(101)
+        attributes:Destroy()
+    end)
+
     JestGlobals.it(
         "allows the first claim, treats a duplicate claim as idempotent, and rejects a competitor",
         function()

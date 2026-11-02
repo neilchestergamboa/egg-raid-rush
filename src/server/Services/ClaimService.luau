@@ -11,6 +11,7 @@ local EggDefs = require(ConfigFolder:WaitForChild("EggDefs") :: ModuleScript)
 local EggInteractionDefs = require(ConfigFolder:WaitForChild("EggInteractionDefs") :: ModuleScript)
 local RulesFolder = Shared:WaitForChild("Rules")
 local EggClaimOrder = require(RulesFolder:WaitForChild("EggClaimOrder") :: ModuleScript)
+local TutorialRules = require(RulesFolder:WaitForChild("TutorialRules") :: ModuleScript)
 local Internal = script.Parent:WaitForChild("Internal")
 local ClaimLeaseRuntime = require(Internal:WaitForChild("ClaimLeaseRuntime") :: ModuleScript)
 local ClaimValidation = require(Internal:WaitForChild("ClaimValidation") :: ModuleScript)
@@ -100,7 +101,18 @@ end
 
 local function validateRequest(player: Player, eggUid: string): (ResultCode, number?)
     local slot = eggService:GetSlot(eggUid)
-    local egg = EggDefs[eggUid]
+    local egg = if slot == nil then nil else EggDefs[slot.DefId]
+    local profile = dataService:GetProfileData(player)
+    if
+        slot ~= nil
+        and not TutorialRules.CanClaim(
+            slot.OwnerUserId,
+            player.UserId,
+            slot.IsTutorial and profile ~= nil and profile.TutorialCompleted == true
+        )
+    then
+        return "EggUnavailable", nil
+    end
     local eggExists = slot ~= nil and type(egg) == "table"
     local eggPosition = if eggExists then findEggObjectPosition(eggUid) else nil
     local root, hasCharacter = getCharacterRoot(player)
@@ -108,7 +120,6 @@ local function validateRequest(player: Player, eggUid: string): (ResultCode, num
     if root ~= nil and eggPosition ~= nil then
         isWithinRange = (root.Position - eggPosition).Magnitude <= EggInteractionDefs.ClaimDistanceStuds
     end
-    local profile = dataService:GetProfileData(player)
     local code, petPower = ClaimValidation.Validate({
         EggExists = eggExists,
         EggState = if slot == nil then nil else slot.State,

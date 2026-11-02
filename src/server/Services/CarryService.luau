@@ -10,8 +10,11 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Framework = require(Shared:WaitForChild("Framework") :: ModuleScript)
 local Config = Shared:WaitForChild("Config")
 local EggDefs = require(Config:WaitForChild("EggDefs") :: ModuleScript)
+local ZoneDefs = require(Config:WaitForChild("ZoneDefs") :: ModuleScript)
 local CarryDefs = require(Config:WaitForChild("CarryDefs") :: ModuleScript)
+local GuardDefs = require(Config:WaitForChild("GuardDefs") :: ModuleScript)
 local CarryRules = require(Shared:WaitForChild("Rules"):WaitForChild("CarryRules") :: ModuleScript)
+local TutorialRules = require(Shared:WaitForChild("Rules"):WaitForChild("TutorialRules") :: ModuleScript)
 local Internal = script.Parent:WaitForChild("Internal")
 local CarryRuntime = require(Internal:WaitForChild("CarryRuntime") :: ModuleScript)
 local PlayerRateLimiter = require(Internal:WaitForChild("PlayerRateLimiter") :: ModuleScript)
@@ -189,7 +192,17 @@ local function startGuardAfterGrace(record: any)
         if carrier == nil then
             return
         end
-        local started, startError = guardService:StartChase(record.EggUid, egg.GuardDefId, carrier)
+        local guardDefId = egg.GuardDefId
+        local profile = dataService:GetProfileData(carrier)
+        if profile ~= nil and profile.TutorialCompleted ~= true then
+            for _, zone in ZoneDefs do
+                if zone.Id == egg.ZoneId then
+                    guardDefId = zone.TutorialGuardDefId or guardDefId
+                    break
+                end
+            end
+        end
+        local started, startError = guardService:StartChase(record.EggUid, guardDefId, carrier)
         if not started then
             warn("[CarryService] Guard could not wake for " .. record.EggUid .. ": " .. tostring(startError))
         end
@@ -474,6 +487,10 @@ local function bankCreature(player: Player, record: any)
     end
     carryRuntime:CompleteBank(record.EggUid, player.UserId)
     carryRuntime:Forget(record.EggUid)
+    local completed, completeError = dataService:CompleteTutorial(player)
+    if not completed then
+        warn("[CarryService] Could not save first-bank tutorial completion: " .. tostring(completeError))
+    end
     removeCarriedVisual(player.UserId)
     removeDroppedVisual(record.EggUid)
     restoreCarrierSpeed(player)
@@ -571,6 +588,24 @@ function CarryService:KnitStart()
 end
 
 function CarryService:OnGuardTagged(eggUid: string, userId: number, position: Vector3): boolean
+    local slot = eggService:GetSlot(eggUid)
+    local egg = if slot == nil then nil else EggDefs[slot.DefId]
+    local tutorialGuard = GuardDefs[ZoneDefs.Zone1.TutorialGuardDefId]
+    local player = Players:GetPlayerByUserId(userId)
+    if slot ~= nil and player ~= nil and type(egg) == "table" and type(tutorialGuard) == "table" then
+        local profile = dataService:GetProfileData(player)
+        local isTutorialRun = profile ~= nil and profile.TutorialCompleted ~= true
+        local alreadyForgiven = profile ~= nil and profile.TutorialFirstDropForgiven == true
+        if TutorialRules.ShouldForgiveFirstDrop(isTutorialRun, tutorialGuard.ForgiveFirstDrop, alreadyForgiven) then
+            local forgiven, forgiveError = dataService:ConsumeTutorialFirstDropForgiveness(player)
+            if forgiven then
+                return true
+            end
+            if forgiveError ~= "AlreadyForgiven" then
+                warn("[CarryService] Could not consume tutorial Guard forgiveness: " .. tostring(forgiveError))
+            end
+        end
+    end
     return dropCreature(eggUid, userId, position)
 end
 

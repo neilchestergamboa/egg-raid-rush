@@ -164,8 +164,8 @@ local function validate(config: any): (boolean, string?)
     if type(zone.EggDefIds) ~= "table" or #zone.EggDefIds ~= 6 then
         return fail("ZoneDefs.Zone1.EggDefIds must contain exactly six field eggs.")
     end
-    if type(zone.GuardDefId) ~= "string" then
-        return fail("ZoneDefs.Zone1.GuardDefId must be a string.")
+    if type(zone.GuardDefId) ~= "string" or type(zone.TutorialGuardDefId) ~= "string" then
+        return fail("ZoneDefs.Zone1 must provide normal and tutorial GuardDefId strings.")
     end
 
     local normalGuard = config.GuardDefs[zone.GuardDefId]
@@ -197,6 +197,7 @@ local function validate(config: any): (boolean, string?)
     end
 
     local usedSlots: { [number]: boolean } = {}
+    local commonEggCount = 0
     for _, eggDefId in ipairs(zone.EggDefIds) do
         if type(eggDefId) ~= "string" then
             return fail("ZoneDefs.Zone1.EggDefIds entries must be strings.")
@@ -215,6 +216,9 @@ local function validate(config: any): (boolean, string?)
         usedSlots[egg.Slot] = true
         if type(egg.RarityId) ~= "string" or type(egg.PetDefId) ~= "string" then
             return fail("EggDefs." .. eggDefId .. " must provide RarityId and PetDefId strings.")
+        end
+        if egg.RarityId == "Common" then
+            commonEggCount += 1
         end
 
         local rarity = config.RarityDefs[egg.RarityId]
@@ -275,20 +279,13 @@ local function validate(config: any): (boolean, string?)
             return fail("PetDefs." .. egg.PetDefId .. ".Gps must match its RarityDef.")
         end
     end
+    if commonEggCount == 0 then
+        return fail("ZoneDefs.Zone1 must contain at least one Common egg for onboarding.")
+    end
 
-    if type(zone.TutorialEggDefId) ~= "string" then
-        return fail("ZoneDefs.Zone1.TutorialEggDefId must be a string.")
-    end
-    local tutorialEgg = config.EggDefs[zone.TutorialEggDefId]
-    if type(tutorialEgg) ~= "table" or not tutorialEgg.IsTutorial or tutorialEgg.ZoneId ~= zone.Id then
-        return fail("ZoneDefs.Zone1.TutorialEggDefId must reference a Zone 1 tutorial egg.")
-    end
-    if type(tutorialEgg.GuardDefId) ~= "string" then
-        return fail("The tutorial egg must provide a GuardDefId string.")
-    end
-    local tutorialGuard = config.GuardDefs[tutorialEgg.GuardDefId]
-    if type(tutorialGuard) ~= "table" or not tutorialGuard.IsTutorial then
-        return fail("The tutorial egg must reference a tutorial GuardDef.")
+    local tutorialGuard = config.GuardDefs[zone.TutorialGuardDefId]
+    if type(tutorialGuard) ~= "table" or tutorialGuard.ZoneId ~= zone.Id or not tutorialGuard.IsTutorial then
+        return fail("ZoneDefs.Zone1.TutorialGuardDefId must reference a tutorial GuardDef in Zone 1.")
     end
     if type(tutorialGuard.Speed) ~= "number" or type(tutorialGuard.ForgiveFirstDrop) ~= "boolean" then
         return fail("The tutorial guard must define numeric Speed and boolean ForgiveFirstDrop.")
@@ -299,25 +296,7 @@ local function validate(config: any): (boolean, string?)
 
     local common = config.RarityDefs.Common
     if type(common) ~= "table" or type(common.PowerMultiplier) ~= "number" or common.PowerMultiplier <= 0 then
-        return fail("RarityDefs.Common.PowerMultiplier must be positive for the tutorial egg.")
-    end
-    if
-        type(tutorialEgg.HatchlingPower) ~= "number"
-        or type(tutorialEgg.BreakSeconds) ~= "number"
-        or type(tutorialEgg.Health) ~= "number"
-    then
-        return fail("The tutorial egg must define numeric power, break time, and health.")
-    end
-    local tutorialPower = zone.RecommendedPetPower * common.PowerMultiplier
-    if
-        tutorialEgg.RarityId ~= "Common"
-        or tutorialEgg.HatchlingPower ~= tutorialPower * 0.5
-        or tutorialEgg.BreakSeconds ~= 4
-        or tutorialEgg.Health ~= tutorialPower * tutorialEgg.BreakSeconds
-    then
-        return fail(
-            "The tutorial egg must use a half-power Common hatchling and health equal to Common power × four seconds."
-        )
+        return fail("RarityDefs.Common.PowerMultiplier must be positive for Zone 1 Common eggs.")
     end
 
     return true, nil

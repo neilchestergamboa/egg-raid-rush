@@ -21,6 +21,7 @@ export type EggSlotDefinition = {
     RarityId: string,
     RespawnSeconds: number,
     IsTutorial: boolean,
+    OwnerUserId: number?,
 }
 
 export type EggSlotRecord = EggSlotDefinition & {
@@ -42,6 +43,7 @@ export type EggSlotRecord = EggSlotDefinition & {
 }
 
 export type EggSlotRuntime = {
+    RegisterDefinition: (self: EggSlotRuntime, definition: EggSlotDefinition) -> (boolean, string?),
     TryClaim: (self: EggSlotRuntime, uid: string, claimantUserId: number) -> (boolean, string?),
     SetExpiresAt: (self: EggSlotRuntime, uid: string, expiresAt: number) -> (boolean, string?),
     ClearExpiresAt: (self: EggSlotRuntime, uid: string) -> (boolean, string?),
@@ -122,6 +124,7 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
             RarityId = definition.RarityId,
             RespawnSeconds = definition.RespawnSeconds,
             IsTutorial = definition.IsTutorial,
+            OwnerUserId = definition.OwnerUserId,
             State = "Sealed",
             ClaimantUserId = nil,
             ExpiresAt = nil,
@@ -148,6 +151,75 @@ local function new(definitions: { EggSlotDefinition }, options: RuntimeOptions):
 
     local function getRecord(uid: string): EggSlotRecord?
         return recordsByUid[uid]
+    end
+
+    function runtime:RegisterDefinition(definition: EggSlotDefinition): (boolean, string?)
+        if type(definition.Uid) ~= "string" or definition.Uid == "" then
+            return false, "InvalidEggUid"
+        end
+        if recordsByUid[definition.Uid] ~= nil then
+            return false, "EggSlotAlreadyRegistered"
+        end
+        if type(definition.DefId) ~= "string" or definition.DefId == "" then
+            return false, "InvalidEggDefId"
+        end
+        if
+            type(definition.ZoneId) ~= "number"
+            or not isFinite(definition.ZoneId)
+            or definition.ZoneId <= 0
+            or definition.ZoneId % 1 ~= 0
+        then
+            return false, "InvalidZoneId"
+        end
+        if
+            type(definition.RespawnSeconds) ~= "number"
+            or not isFinite(definition.RespawnSeconds)
+            or definition.RespawnSeconds <= 0
+        then
+            return false, "InvalidRespawnSeconds"
+        end
+        if definition.OwnerUserId ~= nil then
+            if
+                type(definition.OwnerUserId) ~= "number"
+                or not isFinite(definition.OwnerUserId)
+                or definition.OwnerUserId <= 0
+                or definition.OwnerUserId % 1 ~= 0
+            then
+                return false, "InvalidOwnerUserId"
+            end
+        end
+
+        local record: EggSlotRecord = {
+            Uid = definition.Uid,
+            DefId = definition.DefId,
+            ZoneId = definition.ZoneId,
+            Slot = definition.Slot,
+            RarityId = definition.RarityId,
+            RespawnSeconds = definition.RespawnSeconds,
+            IsTutorial = definition.IsTutorial,
+            OwnerUserId = definition.OwnerUserId,
+            State = "Sealed",
+            ClaimantUserId = nil,
+            ExpiresAt = nil,
+            RespawnSourceState = nil,
+            ConditionRoll = nil,
+            ConditionSeed = nil,
+            ConditionRollOwnerUserId = nil,
+            ClaimedPetUid = nil,
+            ClaimedPetPower = nil,
+            CreatureUid = nil,
+            CarrierUserId = nil,
+            PreviousCarrierUserId = nil,
+            PickupLockoutUntil = nil,
+            DropExpiresAt = nil,
+            DropPosition = nil,
+        }
+        recordsByUid[record.Uid] = record
+        table.insert(orderedUids, record.Uid)
+        table.sort(orderedUids)
+        respawnGenerationByUid[record.Uid] = 0
+        options.OnChanged(cloneRecord(record), nil, "Initialized")
+        return true, nil
     end
 
     local function commitState(record: EggSlotRecord, nextState: EggState, reason: string)

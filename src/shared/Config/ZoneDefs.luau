@@ -6,8 +6,8 @@ export type ZoneDefinition = {
     Theme: string,
     RecommendedPetPower: number,
     GuardDefId: string,
+    TutorialGuardDefId: string,
     EggDefIds: { string },
-    TutorialEggDefId: string,
 }
 
 return {
@@ -17,6 +17,7 @@ return {
         Theme = "Golden grassland with acacia trees, watering holes, and rocky outcrops.",
         RecommendedPetPower = 300,
         GuardDefId = "guard_pride_king",
+        TutorialGuardDefId = "guard_pride_king_tutorial",
         EggDefIds = {
             "egg_z1_slot_1",
             "egg_z1_slot_2",
@@ -25,6 +26,5 @@ return {
             "egg_z1_slot_5",
             "egg_z1_slot_6",
         },
-        TutorialEggDefId = "egg_z1_tutorial",
     },
 }

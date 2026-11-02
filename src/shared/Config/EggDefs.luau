@@ -86,15 +86,4 @@ return {
         RespawnSeconds = 150,
         IsTutorial = false,
     },
-    egg_z1_tutorial = {
-        ZoneId = 1,
-        RarityId = "Common",
-        PetDefId = "pet_jackal_pup",
-        GuardDefId = "guard_pride_king_tutorial",
-        HatchlingPower = 60,
-        BreakSeconds = 4,
-        Health = 480,
-        RespawnSeconds = 25,
-        IsTutorial = true,
-    },
 }

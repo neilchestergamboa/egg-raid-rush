@@ -42,7 +42,8 @@ local function newSeed(): number
 end
 
 local function findEggDef(eggUid: string): any?
-    return EggDefs[eggUid]
+    local slot = if eggService == nil then nil else eggService:GetSlot(eggUid)
+    return if slot == nil then nil else EggDefs[slot.DefId]
 end
 
 local function interpolate(
